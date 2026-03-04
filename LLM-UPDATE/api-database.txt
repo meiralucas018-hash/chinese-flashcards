@@ -1,0 +1,3 @@
+API & DATABASE:
+  - API endpoints: src/app/api/
+  - Database schema: prisma/schema.prisma

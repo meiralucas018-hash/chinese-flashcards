@@ -1,0 +1,4 @@
+FLASHCARD COMPONENTS:
+  - Flashcard logic: src/components/flashcard/Flashcard.tsx
+  - Character practice features: src/components/flashcard/PracticeCanvas.tsx
+  - Character breakdown display: src/components/flashcard/CharacterBreakdown.tsx

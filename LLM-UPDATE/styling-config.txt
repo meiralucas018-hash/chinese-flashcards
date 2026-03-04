@@ -1,0 +1,3 @@
+STYLING & CONFIG:
+  - Styling (colors, fonts): tailwind.config.ts
+  - Dependencies: package.json

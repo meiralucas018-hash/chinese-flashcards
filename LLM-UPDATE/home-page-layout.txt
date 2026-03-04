@@ -1,0 +1,3 @@
+HOME PAGE & LAYOUT:
+  - Home page content/layout: src/app/page.tsx
+  - Navigation, header, footer: src/app/layout.tsx

@@ -1,0 +1,2 @@
+UI COMPONENTS:
+  - UI components (buttons, cards, etc.): src/components/ui/
