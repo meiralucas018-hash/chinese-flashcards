@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>对 – Meaning Map</title>
+<style>
+  :root {
+    --bg-dark: #0a0a0c;
+    --card-bg: #16161a;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --accent-blue: #60a5fa;
+    --accent-purple: #c084fc;
+    --border-color: #26262e;
+    --tooltip-bg: #2d2d35;
+    --word-line: #3f444d;
+
+    --radius-outer: 22px;
+    --radius-inner: 14px;
+    --shadow: 0 25px 55px -14px rgba(0,0,0,.75);
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background-attachment: fixed;
+    background-image:
+        radial-gradient(1200px 700px at 30% 10%, rgba(96,165,250,.10), transparent 60%),
+        radial-gradient(900px 600px at 80% 20%, rgba(192,132,252,.08), transparent 55%),
+        linear-gradient(var(--bg-dark), var(--bg-dark));
+  }
+
+  .anki-wrapper {
+    font-family: 'Segoe UI', 'PingFang SC', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: clamp(18px, 4vw, 40px) 0;
+    box-sizing: border-box;
+  }
+
+  .card-container {
+    background: linear-gradient(180deg, rgba(255,255,255,.03), transparent 30%),
+                var(--card-bg);
+    max-width: 760px;
+    width: min(94%, 760px);
+    border-radius: var(--radius-outer);
+    padding: clamp(20px, 4.2vw, 42px);
+    box-shadow: var(--shadow);
+    border: 1px solid rgba(255,255,255,.06);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card-container::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: calc(var(--radius-outer) + 2px);
+    background: radial-gradient(450px 220px at 20% 0%, rgba(96,165,250,.18), transparent 60%),
+                radial-gradient(420px 240px at 85% 10%, rgba(192,132,252,.14), transparent 60%);
+    pointer-events: none;
+    opacity: .55;
+    filter: blur(10px);
+  }
+
+  .card-container > * { position: relative; }
+
+  .header {
+    text-align: center;
+    margin-bottom: clamp(16px, 3vw, 24px);
+  }
+
+  .char-main {
+    font-size: clamp(3.2rem, 8vw, 4.8rem);
+    font-weight: 850;
+    margin: 0;
+    letter-spacing: 1px;
+    color: rgba(96,165,250,.88);
+    text-shadow:
+      0 0 18px rgba(96,165,250,.22),
+      0 18px 45px rgba(0,0,0,.55);
+    cursor: pointer;
+    display: inline-block;
+    transition: transform 0.2s ease, text-shadow 0.2s ease, color 0.2s ease;
+  }
+
+  .char-main:hover {
+    transform: scale(1.05);
+    color: #fff;
+    text-shadow:
+      0 0 25px rgba(96,165,250,.5),
+      0 18px 45px rgba(0,0,0,.6);
+  }
+
+  .subhead {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+    margin-top: 6px;
+    letter-spacing: .4px;
+  }
+
+  .draw-controls {
+    text-align: center;
+    margin-bottom: clamp(18px, 3vw, 28px);
+  }
+
+  .draw-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.85em;
+    transition: all 0.2s ease;
+  }
+
+  .draw-btn:hover {
+    background: rgba(96, 165, 250, 0.15);
+    border-color: rgba(96, 165, 250, 0.4);
+  }
+
+  .draw-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    max-height: 400px;
+    opacity: 1;
+  }
+
+  .draw-container.hidden {
+    max-height: 0;
+    opacity: 0;
+    pointer-events: none;
+    margin-bottom: 0;
+  }
+
+  .canvas-wrapper {
+    position: relative;
+    width: 250px;
+    height: 250px;
+  }
+
+  .canvas-grid {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+    background-size: 50% 50%;
+    border-radius: var(--radius-inner);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    box-sizing: border-box;
+  }
+
+  .canvas-grid::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(135deg, transparent 49%, rgba(255, 255, 255, 0.05) 50%, transparent 51%),
+      linear-gradient(45deg, transparent 49%, rgba(255, 255, 255, 0.05) 50%, transparent 51%);
+    border-radius: var(--radius-inner);
+  }
+
+  #drawingCanvas {
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: var(--radius-inner);
+    box-shadow: inset 0 3px 15px rgba(0,0,0,0.6);
+    cursor: crosshair;
+    touch-action: none;
+  }
+
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.10), transparent);
+    margin: 0 0 clamp(18px, 3vw, 28px) 0;
+  }
+
+  .meaning-item {
+    position: relative;
+    margin-bottom: clamp(24px, 4vw, 40px);
+    padding: 0 0 0 18px;
+    border-left: 3px solid rgba(255,255,255,.07);
+  }
+
+  .label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.78em;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: 1.6px;
+    color: var(--accent-purple);
+    margin: 0 0 12px 0;
+  }
+
+  .label::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border-radius: 99px;
+    background: rgba(192,132,252,.8);
+    box-shadow: 0 0 0 4px rgba(192,132,252,.15);
+  }
+
+  .sentence-wrap {
+    background: rgba(255,255,255,.02);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: var(--radius-inner);
+    padding: 14px 14px 12px 14px;
+    transition: border-color .18s ease, transform .18s ease, background .18s ease;
+    cursor: pointer;
+  }
+
+  .sentence-wrap:hover {
+    border-color: rgba(96,165,250,.35);
+    background: rgba(255,255,255,.025);
+    transform: translateY(-1px);
+  }
+
+  .sentence-wrap:active {
+    transform: translateY(0px);
+    opacity: .97;
+  }
+
+  .sentence-box {
+    font-size: clamp(1.55rem, 3.8vw, 2.2rem);
+    line-height: 1.8;
+    color: var(--text-primary);
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  .word {
+    position: relative;
+    display: inline-block;
+    border-bottom: 6px dashed var(--word-line);
+    margin-bottom: 10px;
+    padding: 0 3px 6px 3px;
+    cursor: pointer;
+    transition: border-color .2s ease;
+  }
+
+  .word:hover {
+    border-bottom-color: var(--accent-purple);
+  }
+
+  .char {
+    position: relative;
+    display: inline;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: color .1s ease, background .12s ease;
+  }
+
+  .char:hover {
+    color: var(--accent-blue);
+    background: rgba(96,165,250,.14);
+  }
+
+  .char::after,
+  .word::after {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%) translateY(-10px);
+    padding: 7px 12px;
+    border-radius: 10px;
+    font-size: 0.46em;
+    font-weight: 650;
+    white-space: nowrap;
+    visibility: hidden;
+    opacity: 0;
+    z-index: 99999;
+    pointer-events: none;
+    transition: opacity .12s ease, transform .12s ease;
+    max-width: min(78vw, 520px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .char::after {
+    content: attr(data-m);
+    bottom: 100%;
+    margin-bottom: 18px;
+    background: var(--tooltip-bg);
+    color: var(--accent-blue);
+    border: 1px solid rgba(96,165,250,.75);
+    box-shadow: 0 10px 24px rgba(0,0,0,.35);
+  }
+
+  .word::after {
+    content: attr(data-m);
+    bottom: 100%;
+    margin-bottom: 18px;
+    background: rgba(192,132,252,.95);
+    color: #000;
+    border: 1px solid rgba(192,132,252,.35);
+    box-shadow: 0 12px 24px rgba(0,0,0,.28);
+  }
+
+  .char:hover::after,
+  .word:hover::after {
+    visibility: visible;
+    opacity: 1;
+    transform: translateX(-50%) translateY(-16px);
+  }
+
+  .word.suppress-word-tooltip::after {
+    visibility: hidden !important;
+    opacity: 0 !important;
+  }
+
+  .pinyin-line {
+    color: rgba(96,165,250,.95);
+    font-family: 'Noto Sans', 'Segoe UI', 'PingFang SC', system-ui, -apple-system, sans-serif;
+    font-size: 1.05em;
+    margin-top: 10px;
+    line-height: 1.55;
+    letter-spacing: .15px;
+    font-kerning: normal;
+    font-variant-ligatures: none;
+    text-rendering: geometricPrecision;
+  }
+
+  .py {
+    display: inline-block;
+    white-space: nowrap;
+    vertical-align: baseline;
+  }
+
+  .translation-line {
+    color: var(--text-secondary);
+    font-style: italic;
+    font-size: 0.98em;
+    margin-top: 2px;
+  }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%) translateY(18px);
+    background: rgba(22,22,26,.92);
+    border: 1px solid rgba(255,255,255,.10);
+    color: var(--text-primary);
+    padding: 10px 14px;
+    border-radius: 999px;
+    box-shadow: 0 18px 40px rgba(0,0,0,.45);
+    font-size: .95em;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+    z-index: 9999;
+    max-width: min(92vw, 520px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0px);
+  }
+
+  @media (max-width: 420px) {
+    .meaning-item { padding-left: 14px; }
+    .sentence-wrap { padding: 12px; }
+    .char::after, .word::after {
+      max-width: min(88vw, 420px);
+      font-size: 0.50em;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+    .sentence-wrap:hover { transform: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="anki-wrapper">
+  <div class="card-container">
+
+    <div class="header">
+      <div class="char-main">对</div>
+      <div class="subhead">duì • Meaning Map</div>
+    </div>
+
+    <div class="draw-controls">
+      <button id="toggleDrawBtn" class="draw-btn">Practice Drawing</button>
+    </div>
+
+    <div id="drawContainer" class="draw-container hidden">
+      <div class="canvas-wrapper">
+        <canvas id="drawingCanvas" width="250" height="250"></canvas>
+        <div class="canvas-grid"></div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:center;">
+        <button id="undoDrawBtn" class="draw-btn" style="background: rgba(96,165,250,0.08); border-color: rgba(96,165,250,0.25);">Undo</button>
+        <button id="clearDrawBtn" class="draw-btn" style="background: rgba(255, 60, 60, 0.1); border-color: rgba(255, 60, 60, 0.2);">Clear Pad</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="meaning-item">
+      <span class="label">1. Correct / Right</span>
+      <div class="sentence-wrap" data-clickcopy="true" data-copy="这个答案是对的。">
+        <div class="sentence-box">
+          <span class="word" data-m="WORD: zhège (this)">
+            <span class="char" data-m="zhè (this)">这</span><span class="char" data-m="ge (item)">个</span>
+          </span>
+          <span class="word" data-m="WORD: dá'àn (answer)">
+            <span class="char" data-m="dá (reply)">答</span><span class="char" data-m="àn (record)">案</span>
+          </span>
+          <span class="char" data-m="shì (is)">是</span><span class="char" data-m="duì (correct)">对</span><span class="char" data-m="de (particle)">的</span>。
+        </div>
+      </div>
+      <div class="pinyin-line">
+        <span class="py">Zhège</span> <span class="py">dá'àn</span> <span class="py">shì</span> <span class="py">duì</span> <span class="py">de.</span>
+      </div>
+      <div class="translation-line">This answer is correct.</div>
+    </div>
+
+    <div class="meaning-item">
+      <span class="label">2. Verb: To face / treat / reply</span>
+      <div class="sentence-wrap" data-clickcopy="true" data-copy="他对我笑了笑。">
+        <div class="sentence-box">
+          <span class="char" data-m="tā (he)">他</span><span class="char" data-m="duì (faced)">对</span><span class="char" data-m="wǒ (me)">我</span>
+          <span class="word" data-m="REDUPLICATION: xiàolexiào (smiled)">
+            <span class="char" data-m="xiào (smile)">笑</span><span class="char" data-m="le (past)">了</span><span class="char" data-m="xiào (smile)">笑</span>
+          </span>。
+        </div>
+      </div>
+      <div class="pinyin-line">
+        <span class="py">Tā</span> <span class="py">duì</span> <span class="py">wǒ</span> <span class="py">xiàole</span> <span class="py">xiào.</span>
+      </div>
+      <div class="translation-line">He faced me and smiled. / He smiled at me.</div>
+    </div>
+
+    <div class="meaning-item">
+      <span class="label">3. Preposition: Regarding / toward</span>
+      <div class="sentence-wrap" data-clickcopy="true" data-copy="他对音乐很感兴趣。">
+        <div class="sentence-box">
+          <span class="char" data-m="tā (he)">他</span><span class="char" data-m="duì (toward)">对</span>
+          <span class="word" data-m="WORD: yīnyuè (music)">
+            <span class="char" data-m="yīn (sound)">音</span><span class="char" data-m="yuè (music)">乐</span>
+          </span>
+          <span class="char" data-m="hěn (very)">很</span>
+          <span class="word" data-m="PHRASE: gǎn xìngqù (interested)">
+            <span class="char" data-m="gǎn (feel)">感</span><span class="char" data-m="xìng (nature)">兴</span><span class="char" data-m="qù (interest)">趣</span>
+          </span>。
+        </div>
+      </div>
+      <div class="pinyin-line">
+        <span class="py">Tā</span> <span class="py">duì</span> <span class="py">yīnyuè</span> <span class="py">hěn</span> <span class="py">gǎn</span> <span class="py">xìngqù.</span>
+      </div>
+      <div class="translation-line">He is very interested in music.</div>
+    </div>
+
+    <div class="meaning-item">
+      <span class="label">4. Classifier: For Pairs</span>
+      <div class="sentence-wrap" data-clickcopy="true" data-copy="那是一对夫妻。">
+        <div class="sentence-box">
+          <span class="char" data-m="nà (that)">那</span><span class="char" data-m="shì (is)">是</span>
+          <span class="char" data-m="yī (one)">一</span><span class="char" data-m="duì (pair)">对</span>
+          <span class="word" data-m="WORD: fūqī (couple)">
+            <span class="char" data-m="fū (husband)">夫</span><span class="char" data-m="qī (wife)">妻</span>
+          </span>。
+        </div>
+      </div>
+      <div class="pinyin-line">
+        <span class="py">Nà</span> <span class="py">shì</span> <span class="py">yī</span> <span class="py">duì</span> <span class="py">fūqī.</span>
+      </div>
+      <div class="translation-line">That is a pair (couple) of husband and wife.</div>
+    </div>
+
+    <div class="meaning-item" style="margin-bottom:0;">
+      <span class="label">5. Common Usage</span>
+      <div class="sentence-wrap" data-clickcopy="true" data-copy="对不起，我迟到了。">
+        <div class="sentence-box">
+          <span class="word" data-m="WORD: duìbuqǐ (sorry)">
+            <span class="char" data-m="duì (face)">对</span><span class="char" data-m="bu (not)">不</span><span class="char" data-m="qǐ (rise)">起</span>
+          </span>，
+          <span class="char" data-m="wǒ (I)">我</span>
+          <span class="word" data-m="WORD: chídào (arrive late)">
+            <span class="char" data-m="chí (late)">迟</span><span class="char" data-m="dào (arrive)">到</span>
+          </span>
+          <span class="char" data-m="le (past)">了</span>。
+        </div>
+      </div>
+      <div class="pinyin-line">
+        <span class="py">Duìbuqǐ,</span> <span class="py">wǒ</span> <span class="py">chídào</span> <span class="py">le.</span>
+      </div>
+      <div class="translation-line">Sorry, I am late.</div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast">Copied!</div>
+
+<script>
+  (function () {
+    var toast = document.getElementById('toast');
+    var toastTimer = null;
+
+    function showToast(msg) {
+      if (!toast) return;
+      toast.textContent = msg || 'Copied!';
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () {
+        toast.classList.remove('show');
+      }, 1400);
+    }
+
+    async function copyToClipboard(text) {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      } catch (e) {}
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      } catch (e2) {
+        return false;
+      }
+    }
+
+    function wireMainCharCopy() {
+      var mainChar = document.querySelector('.char-main');
+      if (!mainChar) return;
+      mainChar.addEventListener('click', async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var txt = (this.textContent || '').trim();
+        if (!txt) return;
+        var ok = await copyToClipboard(txt);
+        if (ok) showToast('Copied: ' + txt);
+        else showToast('Copy failed');
+      });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       SNAP-TO-PERFECT DRAWING PAD with faint character template
+       ───────────────────────────────────────────────────────────────
+       Now includes a light-gray '对' in a beautiful calligraphic font
+       (KaiTi) as a tracing guide. The template remains visible behind
+       all strokes and is preserved across undo/clear.
+    */
+    function initDrawPad() {
+      var canvas    = document.getElementById('drawingCanvas');
+      var toggleBtn = document.getElementById('toggleDrawBtn');
+      var clearBtn  = document.getElementById('clearDrawBtn');
+      var undoBtn   = document.getElementById('undoDrawBtn');
+      var container = document.getElementById('drawContainer');
+      if (!canvas || !toggleBtn || !clearBtn || !undoBtn || !container) return;
+
+      var ctx       = canvas.getContext('2d');
+      var isDrawing = false;
+      var rawPoints = [];
+
+      // Draw a faint reference character in a refined Chinese font
+      function drawTemplate() {
+        ctx.save();
+        // Elegant Kai / calligraphic font stack
+        ctx.font = '180px "KaiTi", "楷体", "STKaiti", "华文楷体", "Kai", "Noto Serif SC", serif';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';  // very subtle
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('对', canvas.width / 2, canvas.height / 2);
+        ctx.restore();
+      }
+
+      // Undo stack of ImageData snapshots (index 0 = blank canvas with template)
+      var undoStack = [];
+
+      // ── Style for user strokes ─────────────────────────────────
+      function applyStyle() {
+        ctx.lineWidth   = 5;
+        ctx.lineCap     = 'round';
+        ctx.lineJoin    = 'round';
+        ctx.strokeStyle = '#f1f5f9';
+        ctx.shadowColor = 'rgba(96, 165, 250, 0.4)';
+        ctx.shadowBlur  = 6;
+      }
+      applyStyle();
+
+      // ── Coordinate helper ─────────────────────────────────────
+      function getCoords(e) {
+        var rect   = canvas.getBoundingClientRect();
+        var scaleX = canvas.width  / rect.width;
+        var scaleY = canvas.height / rect.height;
+        var src    = (e.touches && e.touches.length) ? e.touches[0] : e;
+        return {
+          x: (src.clientX - rect.left) * scaleX,
+          y: (src.clientY - rect.top)  * scaleY
+        };
+      }
+
+      // ── Snapshot helpers ──────────────────────────────────────
+      function restoreSnapshot(snap) { ctx.putImageData(snap, 0, 0); }
+      function saveSnapshot()        { return ctx.getImageData(0, 0, canvas.width, canvas.height); }
+
+      /* ── Chaikin smoothing (live preview only) ──────────────── */
+      function chaikin(pts, passes) {
+        var r = pts;
+        for (var p = 0; p < (passes || 3); p++) {
+          var n = [ r[0] ];
+          for (var i = 0; i < r.length - 1; i++) {
+            var a = r[i], b = r[i+1];
+            n.push({ x: 0.75*a.x + 0.25*b.x, y: 0.75*a.y + 0.25*b.y });
+            n.push({ x: 0.25*a.x + 0.75*b.x, y: 0.25*a.y + 0.75*b.y });
+          }
+          n.push(r[r.length - 1]);
+          r = n;
+        }
+        return r;
+      }
+
+      function catmullSeg(p0, p1, p2, p3) {
+        var cp1x = p1.x + (p2.x - p0.x) / 3;
+        var cp1y = p1.y + (p2.y - p0.y) / 3;
+        var cp2x = p2.x - (p3.x - p1.x) / 3;
+        var cp2y = p2.y - (p3.y - p1.y) / 3;
+        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+      }
+
+      function drawLivePreview(pts) {
+        if (pts.length < 2) return;
+        var s   = chaikin(pts, 3);
+        var g0  = { x: 2*s[0].x - s[1].x,               y: 2*s[0].y - s[1].y };
+        var gN  = { x: 2*s[s.length-1].x - s[s.length-2].x, y: 2*s[s.length-1].y - s[s.length-2].y };
+        var all = [g0].concat(s).concat([gN]);
+        ctx.beginPath();
+        ctx.moveTo(all[1].x, all[1].y);
+        if (all.length <= 3) {
+          ctx.lineTo(all[all.length-2].x, all[all.length-2].y);
+        } else {
+          for (var i = 1; i < all.length - 2; i++) {
+            catmullSeg(all[i-1], all[i], all[i+1], all[i+2]);
+          }
+        }
+        ctx.stroke();
+      }
+
+      var STRAIGHT_THRESHOLD = 0.10;   // 10% of chord → treated as straight
+
+      function beautifyAndDraw(pts) {
+        if (pts.length < 2) return;
+
+        var p0 = pts[0];
+        var pN = pts[pts.length - 1];
+
+        // Arc-length parameterisation
+        var arcLen = [0];
+        for (var i = 1; i < pts.length; i++) {
+          var ddx = pts[i].x - pts[i-1].x;
+          var ddy = pts[i].y - pts[i-1].y;
+          arcLen.push(arcLen[i-1] + Math.sqrt(ddx*ddx + ddy*ddy));
+        }
+        var totalLen = arcLen[arcLen.length - 1];
+        if (totalLen < 2) {
+          // Dot / tap
+          ctx.beginPath();
+          ctx.arc(p0.x, p0.y, 3, 0, Math.PI * 2);
+          ctx.fillStyle = '#f1f5f9';
+          ctx.fill();
+          return;
+        }
+        var tArr = arcLen.map(function(l) { return l / totalLen; });
+
+        // Straightness test
+        var chordDx  = pN.x - p0.x;
+        var chordDy  = pN.y - p0.y;
+        var chordLen = Math.sqrt(chordDx*chordDx + chordDy*chordDy);
+        var maxDev   = 0;
+
+        for (var i = 1; i < pts.length - 1; i++) {
+          var ex = pts[i].x - p0.x;
+          var ey = pts[i].y - p0.y;
+          var dev = (chordLen < 1)
+            ? Math.sqrt(ex*ex + ey*ey)
+            : Math.abs(ex * chordDy - ey * chordDx) / chordLen;
+          if (dev > maxDev) maxDev = dev;
+        }
+
+        applyStyle(); // ensure style is still correct after putImageData
+
+        if (chordLen < 1 || maxDev / chordLen < STRAIGHT_THRESHOLD) {
+          /* ── PERFECT STRAIGHT LINE ── */
+          ctx.beginPath();
+          ctx.moveTo(p0.x, p0.y);
+          ctx.lineTo(pN.x, pN.y);
+          ctx.stroke();
+          return;
+        }
+
+        // Least-squares quadratic Bézier fit
+        var sumW2x = 0, sumW2y = 0, sumW2 = 0;
+
+        for (var i = 1; i < pts.length - 1; i++) {
+          var ti = tArr[i];
+          var wi = 2 * ti * (1 - ti);
+          if (wi < 1e-4) continue;
+
+          var rx = pts[i].x - (1-ti)*(1-ti)*p0.x - ti*ti*pN.x;
+          var ry = pts[i].y - (1-ti)*(1-ti)*p0.y - ti*ti*pN.y;
+
+          sumW2x += wi * rx;
+          sumW2y += wi * ry;
+          sumW2  += wi * wi;
+        }
+
+        var P1;
+        if (sumW2 < 1e-6) {
+          P1 = { x: (p0.x + pN.x) / 2, y: (p0.y + pN.y) / 2 };
+        } else {
+          P1 = { x: sumW2x / sumW2, y: sumW2y / sumW2 };
+        }
+
+        /* ── PERFECT QUADRATIC BÉZIER CURVE ── */
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.quadraticCurveTo(P1.x, P1.y, pN.x, pN.y);
+        ctx.stroke();
+      }
+
+      // ── Event handlers ────────────────────────────────────────
+      function onStart(e) {
+        e.preventDefault();
+        isDrawing = true;
+        rawPoints = [];
+        rawPoints.push(getCoords(e));
+      }
+
+      function onMove(e) {
+        if (!isDrawing) return;
+        e.preventDefault();
+        var c    = getCoords(e);
+        var last = rawPoints[rawPoints.length - 1];
+        var dx   = c.x - last.x, dy = c.y - last.y;
+        if (dx*dx + dy*dy < 4) return;  // ~2px distance gate
+        rawPoints.push(c);
+
+        // Live Chaikin preview (template is preserved because we restore snapshot)
+        restoreSnapshot(undoStack[undoStack.length - 1]);
+        applyStyle();
+        drawLivePreview(rawPoints);
+      }
+
+      function onEnd() {
+        if (!isDrawing) return;
+        isDrawing = false;
+
+        // Replace the rough preview with the perfect beautified stroke
+        restoreSnapshot(undoStack[undoStack.length - 1]);
+        beautifyAndDraw(rawPoints);
+
+        // Commit to undo stack
+        undoStack.push(saveSnapshot());
+        rawPoints = [];
+      }
+
+      // Mouse
+      canvas.addEventListener('mousedown',  onStart);
+      canvas.addEventListener('mousemove',  onMove);
+      canvas.addEventListener('mouseup',    onEnd);
+      canvas.addEventListener('mouseleave', onEnd);
+
+      // Touch
+      canvas.addEventListener('touchstart',  onStart, { passive: false });
+      canvas.addEventListener('touchmove',   onMove,  { passive: false });
+      canvas.addEventListener('touchend',    onEnd);
+      canvas.addEventListener('touchcancel', onEnd);
+
+      // ── Undo ──────────────────────────────────────────────────
+      undoBtn.addEventListener('click', function () {
+        if (undoStack.length > 1) {
+          undoStack.pop();
+          restoreSnapshot(undoStack[undoStack.length - 1]);
+        }
+      });
+
+      // ── Clear ─────────────────────────────────────────────────
+      clearBtn.addEventListener('click', function () {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawTemplate();                      // re-draw the faint character
+        undoStack = [ saveSnapshot() ];      // new clean state with template
+        rawPoints = [];
+      });
+
+      // ── Toggle ────────────────────────────────────────────────
+      toggleBtn.addEventListener('click', function () {
+        if (container.classList.contains('hidden')) {
+          container.classList.remove('hidden');
+          this.textContent = 'Close Drawing Pad';
+        } else {
+          container.classList.add('hidden');
+          this.textContent = 'Practice Drawing';
+        }
+      });
+
+      // ── Initialise canvas with template and first snapshot ────
+      drawTemplate();
+      undoStack.push(saveSnapshot());
+    }
+
+    function wireCharCopy() {
+      document.querySelectorAll('.char').forEach(function (ch) {
+        ch.addEventListener('click', async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var txt = (ch.textContent || '').trim();
+          if (!txt) return;
+          var ok = await copyToClipboard(txt);
+          if (ok) showToast('Copied: ' + txt);
+          else showToast('Copy failed');
+        });
+      });
+    }
+
+    function wireWordCopy() {
+      document.querySelectorAll('.word').forEach(function (w) {
+        w.addEventListener('click', async function (e) {
+          if (e.target && e.target.closest && e.target.closest('.char')) return;
+          e.preventDefault();
+          e.stopPropagation();
+          var txt = (w.textContent || '').replace(/\s+/g, '').trim();
+          if (!txt) return;
+          var ok = await copyToClipboard(txt);
+          if (ok) showToast('Copied: ' + txt);
+          else showToast('Copy failed');
+        });
+      });
+    }
+
+    function wireSentenceCopy() {
+      document.querySelectorAll('.sentence-wrap[data-clickcopy="true"]').forEach(function (wrap) {
+        wrap.addEventListener('click', async function (e) {
+          if (e.target.closest('.word') || e.target.closest('.char')) return;
+          var text = wrap.getAttribute('data-copy') || '';
+          if (!text) return;
+          var ok = await copyToClipboard(text);
+          if (ok) showToast('Copied: ' + text);
+          else showToast('Copy failed');
+        });
+      });
+    }
+
+    function wireTooltipSuppress() {
+      document.querySelectorAll('.word .char').forEach(function (ch) {
+        ch.addEventListener('mouseenter', function () {
+          var w = ch.closest('.word');
+          if (w) w.classList.add('suppress-word-tooltip');
+        });
+        ch.addEventListener('mouseleave', function () {
+          var w = ch.closest('.word');
+          if (w) w.classList.remove('suppress-word-tooltip');
+        });
+        ch.addEventListener('touchstart', function () {
+          var w = ch.closest('.word');
+          if (w) w.classList.add('suppress-word-tooltip');
+          setTimeout(function () {
+            if (w) w.classList.remove('suppress-word-tooltip');
+          }, 800);
+        }, { passive: true });
+      });
+    }
+
+    wireMainCharCopy();
+    initDrawPad();
+    wireCharCopy();
+    wireWordCopy();
+    wireSentenceCopy();
+    wireTooltipSuppress();
+  })();
+</script>
+</body>
+</html>

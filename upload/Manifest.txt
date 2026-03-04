@@ -1,0 +1,1 @@
+{"name":"汉字 Flash","short_name":"汉字","description":"Spaced repetition flashcards for Chinese characters","start_url":"/hanzi-flash/","scope":"/hanzi-flash/","display":"standalone","background_color":"#0a0a0c","theme_color":"#0a0a0c","orientation":"portrait-primary","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}

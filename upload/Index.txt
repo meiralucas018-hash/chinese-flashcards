@@ -1,0 +1,2650 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0c" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="description" content="Offline-first Chinese flashcards with decks, spaced repetition, pinyin tones, and TTS." />
+
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+
+  <title>HanziCards — Chinese Flashcards</title>
+
+  <style>
+    :root{
+      --bg:#0a0a0c;
+      --panel:#141418;
+      --panel2:#19191f;
+      --line:#272733;
+      --text:#f1f5f9;
+      --muted:#97a6ba;
+      --muted2:#7a8aa1;
+
+      --blue:#60a5fa;
+      --purple:#c084fc;
+      --green:#34d399;
+      --yellow:#fbbf24;
+      --red:#fb7185;
+
+      --tone1:#60a5fa;
+      --tone2:#34d399;
+      --tone3:#fbbf24;
+      --tone4:#fb7185;
+      --tone5:#a8b3c6;
+
+      --shadow: 0 28px 60px -22px rgba(0,0,0,.85);
+      --r1:22px;
+      --r2:14px;
+      --max: 1040px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color:var(--text);
+      background:
+        radial-gradient(1200px 700px at 20% 15%, rgba(96,165,250,.11), transparent 60%),
+        radial-gradient(900px 600px at 85% 30%, rgba(192,132,252,.09), transparent 60%),
+        radial-gradient(900px 600px at 35% 95%, rgba(52,211,153,.06), transparent 55%),
+        var(--bg);
+      background-attachment: fixed;
+    }
+
+    a{color:inherit}
+    button, input, select, textarea{font:inherit}
+    button{cursor:pointer}
+
+    .app{
+      min-height:100%;
+      display:flex;
+      flex-direction:column;
+    }
+
+    header{
+      position:sticky;
+      top:0;
+      z-index:50;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      background: linear-gradient(to bottom, rgba(10,10,12,.92), rgba(10,10,12,.65));
+      border-bottom:1px solid rgba(39,39,51,.65);
+    }
+
+    .header-inner{
+      max-width:var(--max);
+      margin:0 auto;
+      padding: 14px 16px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      justify-content:space-between;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      min-width: 220px;
+    }
+
+    .logo{
+      width:38px;
+      height:38px;
+      border-radius: 12px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.10);
+      box-shadow: 0 18px 44px -24px rgba(0,0,0,.9);
+      background: rgba(255,255,255,.04);
+      display:grid;
+      place-items:center;
+      flex: 0 0 auto;
+    }
+    .logo svg{width:32px;height:32px;opacity:.95}
+
+    .brand h1{
+      margin:0;
+      font-size:14px;
+      letter-spacing:.2px;
+      line-height:1.1;
+    }
+    .brand .sub{
+      margin-top:2px;
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .header-actions{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    .chip{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      background: rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.09);
+      padding: 8px 10px;
+      border-radius: 999px;
+    }
+
+    .chip label{font-size:12px;color:var(--muted)}
+    .chip select{
+      background: transparent;
+      border:none;
+      color:var(--text);
+      outline:none;
+      font-weight:650;
+      max-width: 240px;
+    }
+    .chip select option{background:#0f0f14}
+
+    .btn{
+      border:none;
+      color:var(--text);
+      background: rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.10);
+      padding: 10px 12px;
+      border-radius: 12px;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      transition: transform .08s ease, background .12s ease, border-color .12s ease;
+      user-select:none;
+    }
+    .btn:hover{background: rgba(255,255,255,.08)}
+    .btn:active{transform: translateY(1px)}
+    .btn.primary{
+      background: linear-gradient(135deg, rgba(96,165,250,.22), rgba(192,132,252,.18));
+      border-color: rgba(96,165,250,.25);
+    }
+    .btn.danger{
+      background: rgba(251,113,133,.10);
+      border-color: rgba(251,113,133,.25);
+    }
+    .btn.good{
+      background: rgba(52,211,153,.10);
+      border-color: rgba(52,211,153,.25);
+    }
+    .btn.warn{
+      background: rgba(251,191,36,.10);
+      border-color: rgba(251,191,36,.25);
+    }
+    .btn.small{padding: 8px 10px;border-radius: 10px;font-size:13px}
+    .btn.icon{padding: 10px 10px}
+    .btn[disabled]{opacity:.55;cursor:not-allowed}
+
+    nav{
+      max-width:var(--max);
+      margin:0 auto;
+      padding: 0 16px 14px;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .tab{
+      text-decoration:none;
+      font-size:13px;
+      color:var(--muted);
+      padding: 8px 10px;
+      border-radius: 999px;
+      border:1px solid rgba(255,255,255,.06);
+      background: rgba(255,255,255,.03);
+    }
+    .tab.active{
+      color:var(--text);
+      background: rgba(255,255,255,.06);
+      border-color: rgba(255,255,255,.10);
+    }
+
+    main{
+      flex:1;
+      max-width:var(--max);
+      width:100%;
+      margin:0 auto;
+      padding: 18px 16px 64px;
+    }
+
+    .grid{
+      display:grid;
+      gap:16px;
+    }
+    @media(min-width: 900px){
+      .grid.cols2{grid-template-columns: 1.2fr .8fr;}
+      .grid.cols3{grid-template-columns: 1fr 1fr 1fr;}
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
+      border:1px solid rgba(255,255,255,.08);
+      border-radius: var(--r1);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card .hd{
+      padding: 14px 14px 10px;
+      border-bottom:1px solid rgba(255,255,255,.07);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .card .hd h2{
+      margin:0;
+      font-size:14px;
+      letter-spacing:.2px;
+    }
+    .card .hd .meta{
+      font-size:12px;
+      color:var(--muted);
+    }
+    .card .bd{
+      padding: 14px;
+    }
+
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .row.between{justify-content:space-between}
+    .muted{color:var(--muted)}
+    .muted2{color:var(--muted2)}
+    .kpi{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+    .kpi .pill{
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 999px;
+      padding: 8px 10px;
+      font-size:12px;
+      color: var(--muted);
+    }
+    .pill b{color:var(--text);font-weight:700}
+
+    .list{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .item{
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 16px;
+      padding: 12px;
+      display:flex;
+      gap:12px;
+      align-items:flex-start;
+      justify-content:space-between;
+    }
+    .item .left{min-width:0}
+    .item .title{
+      margin:0;
+      font-size:14px;
+      font-weight:750;
+      letter-spacing:.15px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .badge{
+      font-size:11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border:1px solid rgba(255,255,255,.10);
+      color:var(--muted);
+      background: rgba(255,255,255,.03);
+    }
+    .item .desc{
+      margin-top:6px;
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.4;
+      word-break: break-word;
+    }
+    .item .right{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+
+    .form{
+      display:grid;
+      gap:10px;
+    }
+    .field{
+      display:grid;
+      gap:6px;
+    }
+    .field label{
+      font-size:12px;
+      color:var(--muted);
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .field input, .field textarea{
+      width:100%;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(10,10,12,.35);
+      color:var(--text);
+      outline:none;
+    }
+    .field textarea{min-height: 92px; resize: vertical;}
+    .hint{font-size:12px;color:var(--muted2);line-height:1.35}
+    .divider{
+      height:1px;
+      background: rgba(255,255,255,.08);
+      margin: 10px 0;
+    }
+
+    .flash{
+      display:grid;
+      gap:14px;
+    }
+
+    .flashcard{
+      border-radius: var(--r1);
+      overflow:hidden;
+      border: 1px solid rgba(255,255,255,.10);
+      background:
+        radial-gradient(900px 540px at 20% 10%, rgba(96,165,250,.08), transparent 60%),
+        radial-gradient(900px 540px at 85% 35%, rgba(192,132,252,.07), transparent 60%),
+        rgba(255,255,255,.03);
+      box-shadow: var(--shadow);
+    }
+    .flashcard .topbar{
+      padding: 12px 14px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+      flex-wrap:wrap;
+    }
+    .flashcard .content{
+      padding: 18px 16px 16px;
+      display:grid;
+      gap:14px;
+      min-height: 240px;
+      align-content:center;
+      text-align:center;
+    }
+
+    .hanzi{
+      font-size: clamp(44px, 7vw, 86px);
+      font-weight: 900;
+      letter-spacing: 2px;
+      line-height: 1.05;
+      display:flex;
+      justify-content:center;
+      flex-wrap:wrap;
+      gap: 6px;
+      padding: 6px 0;
+      user-select:none;
+    }
+    .hanzi .hz{
+      border-radius: 14px;
+      padding: 6px 10px;
+      border: 1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.03);
+      transition: transform .08s ease, background .12s ease, border-color .12s ease;
+    }
+    .hanzi .hz:hover{
+      border-color: rgba(96,165,250,.25);
+      background: rgba(96,165,250,.06);
+    }
+    .hanzi .hz:active{transform: translateY(1px)}
+    .hanzi .hz.main{
+      border-color: rgba(192,132,252,.28);
+      background: rgba(192,132,252,.08);
+      box-shadow: 0 14px 40px -30px rgba(192,132,252,.65);
+    }
+
+    .pinyin{
+      font-size: clamp(16px, 2.7vw, 22px);
+      color: var(--muted);
+      letter-spacing: .2px;
+      display:flex;
+      gap: 10px;
+      justify-content:center;
+      flex-wrap:wrap;
+      user-select:none;
+    }
+    .syll{
+      padding: 4px 10px;
+      border-radius: 999px;
+      border:1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.03);
+    }
+    .tone1{color:var(--tone1)}
+    .tone2{color:var(--tone2)}
+    .tone3{color:var(--tone3)}
+    .tone4{color:var(--tone4)}
+    .tone5{color:var(--tone5)}
+
+    .meaning{
+      font-size: 16px;
+      line-height: 1.45;
+      color: var(--text);
+      max-width: 70ch;
+      margin: 0 auto;
+      white-space: pre-wrap;
+    }
+    .example{
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+      max-width: 80ch;
+      margin: 0 auto;
+      white-space: pre-wrap;
+    }
+
+    .flashcard .actions{
+      padding: 14px;
+      border-top:1px solid rgba(255,255,255,.08);
+      display:flex;
+      gap:10px;
+      justify-content:center;
+      flex-wrap:wrap;
+    }
+
+    .rating{
+      display:flex;
+      gap:10px;
+      justify-content:center;
+      flex-wrap:wrap;
+    }
+
+    .kbd{
+      font-size: 11px;
+      color: var(--muted2);
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      padding: 2px 6px;
+      border-radius: 8px;
+      margin-left: 6px;
+    }
+
+    dialog{
+      border:none;
+      padding:0;
+      border-radius: 18px;
+      width:min(720px, calc(100% - 24px));
+      color:var(--text);
+      background:
+        radial-gradient(900px 540px at 20% 10%, rgba(96,165,250,.10), transparent 60%),
+        radial-gradient(900px 540px at 85% 35%, rgba(192,132,252,.08), transparent 60%),
+        rgba(15,15,20,.98);
+      border: 1px solid rgba(255,255,255,.10);
+      box-shadow: 0 40px 90px -40px rgba(0,0,0,.90);
+    }
+    dialog::backdrop{
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(4px);
+    }
+    .dlg-hd{
+      padding: 14px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .dlg-hd h3{margin:0;font-size:14px}
+    .dlg-bd{padding: 14px}
+    .dlg-ft{
+      padding: 14px;
+      border-top:1px solid rgba(255,255,255,.08);
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+      flex-wrap:wrap;
+    }
+
+    .toast-wrap{
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 18px;
+      z-index: 100;
+      display:grid;
+      gap:10px;
+      width:min(640px, calc(100% - 24px));
+      pointer-events:none;
+    }
+    .toast{
+      pointer-events:auto;
+      background: rgba(20,20,26,.92);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius: 16px;
+      padding: 12px 12px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      box-shadow: 0 28px 70px -40px rgba(0,0,0,.95);
+    }
+    .toast .msg{font-size:13px;color:var(--text);line-height:1.35}
+    .toast .msg .small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+    .toast .act{display:flex;gap:8px;flex-wrap:wrap}
+
+    .practice{
+      display:grid;
+      gap:12px;
+    }
+    .canvas-wrap{
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.02);
+      border-radius: 18px;
+      overflow:hidden;
+      position:relative;
+      box-shadow: 0 26px 60px -42px rgba(0,0,0,.9);
+    }
+    canvas{
+      width:100%;
+      height: 320px;
+      display:block;
+      touch-action: none;
+      background:
+        linear-gradient(transparent 0, transparent 49%, rgba(255,255,255,.06) 50%, transparent 51%, transparent 100%),
+        linear-gradient(90deg, transparent 0, transparent 49%, rgba(255,255,255,.06) 50%, transparent 51%, transparent 100%);
+      background-size: 42px 42px;
+      background-color: rgba(10,10,12,.10);
+    }
+    .canvas-overlay{
+      position:absolute;
+      inset:0;
+      display:grid;
+      place-items:center;
+      pointer-events:none;
+      opacity:.16;
+      font-size: 160px;
+      font-weight: 900;
+      letter-spacing: 4px;
+      user-select:none;
+    }
+
+    .sr-only{
+      position:absolute;
+      width:1px;
+      height:1px;
+      padding:0;
+      margin:-1px;
+      overflow:hidden;
+      clip:rect(0,0,0,0);
+      white-space:nowrap;
+      border:0;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <header>
+      <div class="header-inner">
+        <div class="brand">
+          <div class="logo" aria-hidden="true" title="HanziCards">
+            <svg viewBox="0 0 64 64" fill="none">
+              <defs>
+                <linearGradient id="g" x1="10" y1="6" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#60a5fa" stop-opacity="0.95"/>
+                  <stop offset="1" stop-color="#c084fc" stop-opacity="0.95"/>
+                </linearGradient>
+              </defs>
+              <rect x="10" y="10" width="44" height="44" rx="14" fill="url(#g)" fill-opacity="0.30" stroke="rgba(255,255,255,.18)"/>
+              <path d="M22 24h20M24 20v24m16-24v24M22 40h20" stroke="rgba(241,245,249,.95)" stroke-width="3.2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <h1>HanziCards</h1>
+            <div class="sub">Offline Chinese flashcards · decks · SRS · TTS</div>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <div class="chip" title="Select deck">
+            <label for="deckSelect">Deck</label>
+            <select id="deckSelect" aria-label="Select deck"></select>
+          </div>
+
+          <button class="btn small" id="installBtn" style="display:none" title="Install (PWA)">
+            ⬇️ Install
+          </button>
+
+          <button class="btn small" id="syncHintBtn" title="App status">
+            ✅ Offline-ready
+          </button>
+        </div>
+      </div>
+
+      <nav aria-label="Primary navigation">
+        <a class="tab" href="#decks" id="tabDecks">Decks</a>
+        <a class="tab" href="#study" id="tabStudy">Study</a>
+        <a class="tab" href="#add" id="tabAdd">Add</a>
+        <a class="tab" href="#search" id="tabSearch">Search</a>
+        <a class="tab" href="#settings" id="tabSettings">Settings</a>
+      </nav>
+    </header>
+
+    <main id="view" aria-live="polite"></main>
+  </div>
+
+  <div class="toast-wrap" id="toasts" aria-live="polite" aria-relevant="additions"></div>
+
+  <!-- Deck modal -->
+  <dialog id="deckDlg">
+    <div class="dlg-hd">
+      <h3 id="deckDlgTitle">Deck</h3>
+      <button class="btn icon small" id="deckDlgClose" aria-label="Close dialog">✕</button>
+    </div>
+    <div class="dlg-bd">
+      <div class="form">
+        <div class="field">
+          <label for="deckName">Deck name</label>
+          <input id="deckName" placeholder="e.g., HSK 1 — Lesson 3" />
+          <div class="hint">Tip: Keep decks focused (HSK level, lesson, topic).</div>
+        </div>
+      </div>
+    </div>
+    <div class="dlg-ft">
+      <button class="btn" id="deckDlgCancel">Cancel</button>
+      <button class="btn primary" id="deckDlgSave">Save</button>
+    </div>
+  </dialog>
+
+  <!-- Bulk add modal -->
+  <dialog id="bulkDlg">
+    <div class="dlg-hd">
+      <h3>Bulk Add</h3>
+      <button class="btn icon small" id="bulkDlgClose" aria-label="Close dialog">✕</button>
+    </div>
+    <div class="dlg-bd">
+      <div class="hint">
+        Paste lines in one of these formats:<br>
+        <b>hanzi[TAB]pinyin[TAB]meaning</b><br>
+        or <b>hanzi | pinyin | meaning</b><br>
+        Example: 你好[TAB]ni3 hao3[TAB]hello
+      </div>
+      <div class="divider"></div>
+      <div class="field">
+        <label for="bulkText">Paste here</label>
+        <textarea id="bulkText" placeholder="你好	ni3 hao3	hello"></textarea>
+      </div>
+      <div class="row">
+        <span class="muted2">Auto-converts pinyin numbers → tone marks.</span>
+      </div>
+    </div>
+    <div class="dlg-ft">
+      <button class="btn" id="bulkCancel">Cancel</button>
+      <button class="btn primary" id="bulkImport">Add cards</button>
+    </div>
+  </dialog>
+
+  <!-- Confirm modal -->
+  <dialog id="confirmDlg">
+    <div class="dlg-hd">
+      <h3 id="confirmTitle">Confirm</h3>
+      <button class="btn icon small" id="confirmClose" aria-label="Close dialog">✕</button>
+    </div>
+    <div class="dlg-bd">
+      <div id="confirmMsg" class="muted" style="line-height:1.45"></div>
+    </div>
+    <div class="dlg-ft">
+      <button class="btn" id="confirmNo">Cancel</button>
+      <button class="btn danger" id="confirmYes">Delete</button>
+    </div>
+  </dialog>
+
+  <script>
+    /***********************
+     * HanziCards (offline)
+     * - decks + cards in IndexedDB
+     * - SM-2-ish SRS
+     * - pinyin tone mark converter + tone colors
+     * - Mandarin TTS (Web Speech API)
+     * - import/export backup
+     ************************/
+
+    const $ = (s, el=document) => el.querySelector(s);
+    const $$ = (s, el=document) => Array.from(el.querySelectorAll(s));
+
+    const now = () => Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    function uid(){
+      if (crypto?.randomUUID) return crypto.randomUUID();
+      return 'id_' + Math.random().toString(16).slice(2) + '_' + Date.now().toString(16);
+    }
+
+    function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+
+    function toast(message, opts={}){
+      const wrap = $('#toasts');
+      const t = document.createElement('div');
+      t.className = 'toast';
+      const msg = document.createElement('div');
+      msg.className = 'msg';
+      msg.textContent = message;
+
+      const actions = document.createElement('div');
+      actions.className = 'act';
+
+      if (opts.detail){
+        const d = document.createElement('span');
+        d.className = 'small';
+        d.textContent = opts.detail;
+        msg.appendChild(d);
+      }
+
+      if (opts.actionText && typeof opts.onAction === 'function'){
+        const b = document.createElement('button');
+        b.className = 'btn small primary';
+        b.textContent = opts.actionText;
+        b.onclick = () => { try{ opts.onAction(); } finally { t.remove(); } };
+        actions.appendChild(b);
+      }
+
+      const x = document.createElement('button');
+      x.className = 'btn small';
+      x.textContent = 'OK';
+      x.onclick = () => t.remove();
+      actions.appendChild(x);
+
+      t.appendChild(msg);
+      t.appendChild(actions);
+      wrap.appendChild(t);
+
+      const ttl = opts.ttl ?? 3800;
+      if (ttl > 0) setTimeout(() => { if (t.isConnected) t.remove(); }, ttl);
+    }
+
+    function fmtDateTime(ts){
+      if (!ts) return '—';
+      const d = new Date(ts);
+      return d.toLocaleString(undefined, { year:'numeric', month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    }
+
+    function isCJK(ch){
+      const code = ch.codePointAt(0);
+      return (
+        (code >= 0x4E00 && code <= 0x9FFF) ||  // CJK Unified
+        (code >= 0x3400 && code <= 0x4DBF) ||  // Extension A
+        (code >= 0xF900 && code <= 0xFAFF) ||  // Compatibility
+        (code >= 0x20000 && code <= 0x2A6DF)   // Extension B (rare)
+      );
+    }
+
+    function splitHanzi(str){
+      const out = [];
+      for (const ch of (str || '')){
+        if (isCJK(ch)) out.push(ch);
+      }
+      return out.length ? out : [str || ''];
+    }
+
+    async function copyText(text){
+      try{
+        await navigator.clipboard.writeText(text);
+        toast('Copied ✔', { detail: text.length > 28 ? (text.slice(0,28)+'…') : text, ttl: 2000 });
+      }catch(e){
+        // fallback
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        toast('Copied ✔', { ttl: 2000 });
+      }
+    }
+
+    /***************
+     * Pinyin tools
+     ***************/
+    const toneMap = {
+      a: ['ā','á','ǎ','à'],
+      e: ['ē','é','ě','è'],
+      i: ['ī','í','ǐ','ì'],
+      o: ['ō','ó','ǒ','ò'],
+      u: ['ū','ú','ǔ','ù'],
+      ü:['ǖ','ǘ','ǚ','ǜ'],
+      A: ['Ā','Á','Ǎ','À'],
+      E: ['Ē','É','Ě','È'],
+      I: ['Ī','Í','Ǐ','Ì'],
+      O: ['Ō','Ó','Ǒ','Ò'],
+      U: ['Ū','Ú','Ǔ','Ù'],
+      Ü:['Ǖ','Ǘ','Ǚ','Ǜ'],
+    };
+
+    const markedToBaseTone = new Map([
+      ['ā',['a',1]],['á',['a',2]],['ǎ',['a',3]],['à',['a',4]],
+      ['ē',['e',1]],['é',['e',2]],['ě',['e',3]],['è',['e',4]],
+      ['ī',['i',1]],['í',['i',2]],['ǐ',['i',3]],['ì',['i',4]],
+      ['ō',['o',1]],['ó',['o',2]],['ǒ',['o',3]],['ò',['o',4]],
+      ['ū',['u',1]],['ú',['u',2]],['ǔ',['u',3]],['ù',['u',4]],
+      ['ǖ',['ü',1]],['ǘ',['ü',2]],['ǚ',['ü',3]],['ǜ',['ü',4]],
+      ['Ā',['A',1]],['Á',['A',2]],['Ǎ',['A',3]],['À',['A',4]],
+      ['Ē',['E',1]],['É',['E',2]],['Ě',['E',3]],['È',['E',4]],
+      ['Ī',['I',1]],['Í',['I',2]],['Ǐ',['I',3]],['Ì',['I',4]],
+      ['Ō',['O',1]],['Ó',['O',2]],['Ǒ',['O',3]],['Ò',['O',4]],
+      ['Ū',['U',1]],['Ú',['U',2]],['Ǔ',['U',3]],['Ù',['U',4]],
+      ['Ǖ',['Ü',1]],['Ǘ',['Ü',2]],['Ǚ',['Ü',3]],['Ǜ',['Ü',4]],
+    ]);
+
+    function detectToneFromMarked(syll){
+      let tone = 5;
+      for (const ch of syll){
+        if (markedToBaseTone.has(ch)){
+          tone = markedToBaseTone.get(ch)[1];
+          break;
+        }
+      }
+      return tone;
+    }
+
+    function normalizeUmlaut(s){
+      return (s || '')
+        .replace(/u:/gi, m => (m[0] === 'U' ? 'Ü' : 'ü'))
+        .replace(/v/gi, m => (m === 'V' ? 'Ü' : 'ü'));
+    }
+
+    function numericSyllableToMarked(s){
+      // expects one syllable possibly ending with tone number
+      const m = s.match(/^(.+?)([1-5])$/);
+      if (!m) return normalizeUmlaut(s);
+      let base = normalizeUmlaut(m[1]);
+      const tone = parseInt(m[2],10);
+      if (tone === 5) return base;
+
+      // rules: a/e first, ou -> o, else iu->u, ui->i, else last vowel
+      const lower = base.toLowerCase();
+
+      const vowels = ['a','e','o','i','u','ü'];
+      let idx = -1;
+
+      const findVowelIndex = (v) => base.toLowerCase().indexOf(v);
+
+      if (lower.includes('a')) idx = findVowelIndex('a');
+      else if (lower.includes('e')) idx = findVowelIndex('e');
+      else if (lower.includes('ou')) idx = findVowelIndex('o');
+      else if (lower.includes('iu')) idx = findVowelIndex('u');
+      else if (lower.includes('ui')) idx = findVowelIndex('i');
+      else{
+        // last vowel
+        for (let i = base.length - 1; i >= 0; i--){
+          const ch = base[i].toLowerCase();
+          if (vowels.includes(ch)) { idx = i; break; }
+        }
+      }
+
+      if (idx === -1) return base; // nothing to mark
+
+      const ch = base[idx];
+      const key = ch === 'Ü' ? 'Ü' : ch;
+      const lowerKey = ch === 'ü' ? 'ü' : ch.toLowerCase();
+
+      const mapKey = (toneMap[ch] ? ch : (toneMap[lowerKey] ? lowerKey : null));
+      if (!mapKey) return base;
+
+      const marked = toneMap[mapKey][tone - 1];
+      return base.slice(0, idx) + marked + base.slice(idx+1);
+    }
+
+    function pinyinToMarked(p){
+      p = (p || '').trim();
+      if (!p) return '';
+      // split by spaces but keep punctuation
+      const parts = p.split(/(\s+)/);
+      return parts.map(part=>{
+        if (/^\s+$/.test(part)) return part;
+        // also handle hyphenated forms
+        return part.split('-').map(syl=>{
+          // strip trailing punctuation for conversion then add back
+          const m = syl.match(/^(.+?)([.,!?;:，。！？；：])?$/);
+          const core = m ? m[1] : syl;
+          const punct = m ? (m[2] || '') : '';
+          const converted = numericSyllableToMarked(core);
+          return converted + punct;
+        }).join('-');
+      }).join('');
+    }
+
+    function splitPinyinSyllables(p){
+      // output array of {text, tone}
+      const marked = pinyinToMarked(p);
+      const raw = marked.trim();
+      if (!raw) return [];
+      // split on whitespace
+      const tokens = raw.split(/\s+/).filter(Boolean);
+      return tokens.map(t => ({ text: t, tone: detectToneFromMarked(t) }));
+    }
+
+    /****************
+     * TTS (Mandarin)
+     ****************/
+    const TTS = {
+      enabled: true,
+      autoSpeakFront: false,
+      autoSpeakBack: false,
+      voiceURI: null,
+
+      getVoices(){
+        return window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+      },
+
+      pickBestVoice(){
+        const voices = this.getVoices();
+        // prefer zh-CN / Mandarin
+        const preferred = voices.find(v => /zh(-|_)CN/i.test(v.lang) || /zh/i.test(v.lang));
+        return preferred || voices[0] || null;
+      },
+
+      speak(text){
+        if (!this.enabled) return;
+        if (!('speechSynthesis' in window)) {
+          toast('TTS not supported in this browser.', { ttl: 2500 });
+          return;
+        }
+        const t = (text || '').trim();
+        if (!t) return;
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(t);
+        const v = this.pickBestVoice();
+        if (v) u.voice = v;
+        u.rate = 0.95;
+        u.pitch = 1.0;
+        u.volume = 1.0;
+        window.speechSynthesis.speak(u);
+      }
+    };
+
+    /****************
+     * IndexedDB layer
+     ****************/
+    const DB = {
+      name: 'hanzicards_db',
+      version: 1,
+      db: null,
+
+      async open(){
+        if (this.db) return this.db;
+        this.db = await new Promise((resolve, reject)=>{
+          const req = indexedDB.open(this.name, this.version);
+          req.onupgradeneeded = () => {
+            const db = req.result;
+
+            const meta = db.createObjectStore('meta', { keyPath: 'key' });
+
+            const decks = db.createObjectStore('decks', { keyPath: 'id' });
+            decks.createIndex('byUpdatedAt', 'updatedAt');
+
+            const cards = db.createObjectStore('cards', { keyPath: 'id' });
+            cards.createIndex('byDeck', 'deckId');
+            cards.createIndex('byDue', 'dueAt');
+            cards.createIndex('byDeckDue', ['deckId', 'dueAt']);
+            cards.createIndex('byUpdatedAt', 'updatedAt');
+
+            // seed meta
+            meta.put({ key: 'settings', value: {
+              dailyGoal: 30,
+              showPinyinOnFront: true,
+              showMeaningOnFront: false,
+              toneColors: true,
+              ttsEnabled: true,
+              autoSpeakFront: false,
+              autoSpeakBack: false,
+              practiceOverlay: true,
+            }, updatedAt: now() });
+
+            meta.put({ key: 'stats', value: {
+              dateKey: '', reviewedToday: 0, lastReviewAt: 0
+            }, updatedAt: now() });
+
+            meta.put({ key: 'app', value: {
+              createdAt: now(),
+              schema: 1
+            }, updatedAt: now() });
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+        return this.db;
+      },
+
+      tx(storeNames, mode='readonly'){
+        return this.db.transaction(storeNames, mode);
+      },
+
+      async getMeta(key){
+        await this.open();
+        return await new Promise((resolve, reject)=>{
+          const tx = this.tx(['meta'], 'readonly');
+          const req = tx.objectStore('meta').get(key);
+          req.onsuccess = () => resolve(req.result?.value ?? null);
+          req.onerror = () => reject(req.error);
+        });
+      },
+
+      async setMeta(key, value){
+        await this.open();
+        const rec = { key, value, updatedAt: now() };
+        return await new Promise((resolve, reject)=>{
+          const tx = this.tx(['meta'], 'readwrite');
+          tx.objectStore('meta').put(rec);
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => reject(tx.error);
+        });
+      },
+
+      async getDecks(){
+        await this.open();
+        return await new Promise((resolve, reject)=>{
+          const tx = this.tx(['decks'], 'readonly');
+          const req = tx.objectStore('decks').getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => reject(req.error);
+        });
+      },
+
+      async upsertDeck(deck){
+        await this.open();
+        deck.updatedAt = now();
+        if (!deck.createdAt) deck.createdAt = deck.updatedAt;
+        return await new Promise((resolve, reject)=>{
+          const tx = this.tx(['decks'], 'readwrite');
+          tx.objectStore('decks').put(deck);
+          tx.oncomplete = () => resolve(deck);
+          tx.onerror = () => reject(tx.error);
+        });
+      },
+
+      async deleteDeck(deckId){
+        await this.open();
+        return await new Promise((resolve, reject)=>{
+          const tx = this.tx(['decks','cards'], 'readwrite');
+          tx.objectStore('decks').delete(deckId);
+
+          // delete all cards in deck
+          const idx = tx.objectStore('cards').index('byDeck');
+          const range = IDBKeyRange.only(deckId);
+          idx.openCursor(range).onsuccess = (e)=>{
+            const cur = e.target.result;
+            if (cur){
+              cur.delete();
+              cur.continue();
+            }
+          };
+
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => reject(tx.error);
+        });
+      },
+
+      async getCardsByDeck(deckId){
+        await this.open();
+        return await new Promise((resolve, reject)=>{
+          const tx = this.tx(['cards'], 'readonly');
+          const idx = tx.objectStore('cards').index('byDeck');
+          const req = idx.getAll(IDBKeyRange.only(deckId));
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => reject(req.error);
+        });
+      },
+
+      async getCard(cardId){
+        await this.open();
+        return await new Promise((resolve, reject)=>{
+          const tx = this.tx(['cards'], 'readonly');
+          const req = tx.objectStore('cards').get(cardId);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => reject(req.error);
+        });
+      },
+
+      async upsertCard(card){
+        await this.open();
+        card.updatedAt = now();
+        if (!card.createdAt) card.createdAt = card.updatedAt;
+        return await new Promise((resolve, reject)=>{
+          const tx = this.tx(['cards'], 'readwrite');
+          tx.objectStore('cards').put(card);
+          tx.oncomplete = () => resolve(card);
+          tx.onerror = () => reject(tx.error);
+        });
+      },
+
+      async deleteCard(cardId){
+        await this.open();
+        return await new Promise((resolve, reject)=>{
+          const tx = this.tx(['cards'], 'readwrite');
+          tx.objectStore('cards').delete(cardId);
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => reject(tx.error);
+        });
+      },
+
+      async countDue(deckId=null, whenTs=now()){
+        await this.open();
+        return await new Promise((resolve, reject)=>{
+          const tx = this.tx(['cards'], 'readonly');
+          const store = tx.objectStore('cards');
+          const idx = deckId ? store.index('byDeckDue') : store.index('byDue');
+          const range = deckId
+            ? IDBKeyRange.bound([deckId, 0], [deckId, whenTs])
+            : IDBKeyRange.bound(0, whenTs);
+
+          let count = 0;
+          idx.openCursor(range).onsuccess = (e)=>{
+            const cur = e.target.result;
+            if (!cur){ resolve(count); return; }
+            count++;
+            cur.continue();
+          };
+          tx.onerror = () => reject(tx.error);
+        });
+      },
+
+      async getDueCards(deckId=null, limit=40, whenTs=now()){
+        await this.open();
+        return await new Promise((resolve, reject)=>{
+          const tx = this.tx(['cards'], 'readonly');
+          const store = tx.objectStore('cards');
+          const idx = deckId ? store.index('byDeckDue') : store.index('byDue');
+          const range = deckId
+            ? IDBKeyRange.bound([deckId, 0], [deckId, whenTs])
+            : IDBKeyRange.bound(0, whenTs);
+
+          const out = [];
+          idx.openCursor(range).onsuccess = (e)=>{
+            const cur = e.target.result;
+            if (!cur){ resolve(out); return; }
+            out.push(cur.value);
+            if (out.length >= limit){ resolve(out); return; }
+            cur.continue();
+          };
+          tx.onerror = () => reject(tx.error);
+        });
+      },
+
+      async exportAll(){
+        await this.open();
+        const [decks, cards] = await Promise.all([this.getDecks(), this._getAllCards()]);
+        const settings = await this.getMeta('settings');
+        const stats = await this.getMeta('stats');
+        const app = await this.getMeta('app');
+        return { version: 1, exportedAt: now(), decks, cards, settings, stats, app };
+      },
+
+      async _getAllCards(){
+        await this.open();
+        return await new Promise((resolve, reject)=>{
+          const tx = this.tx(['cards'], 'readonly');
+          const req = tx.objectStore('cards').getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => reject(req.error);
+        });
+      },
+
+      async importAll(data, mode='merge'){
+        // mode: 'merge' = upsert by id
+        await this.open();
+        const decks = Array.isArray(data?.decks) ? data.decks : [];
+        const cards = Array.isArray(data?.cards) ? data.cards : [];
+        const settings = data?.settings ?? null;
+
+        return await new Promise((resolve, reject)=>{
+          const tx = this.tx(['decks','cards','meta'], 'readwrite');
+          const ds = tx.objectStore('decks');
+          const cs = tx.objectStore('cards');
+          const ms = tx.objectStore('meta');
+
+          for (const d of decks){
+            if (!d?.id) continue;
+            d.updatedAt = now();
+            if (!d.createdAt) d.createdAt = d.updatedAt;
+            ds.put(d);
+          }
+
+          for (const c of cards){
+            if (!c?.id) continue;
+            c.updatedAt = now();
+            if (!c.createdAt) c.createdAt = c.updatedAt;
+            cs.put(c);
+          }
+
+          if (settings){
+            ms.put({ key:'settings', value: settings, updatedAt: now() });
+          }
+
+          tx.oncomplete = () => resolve({ decks: decks.length, cards: cards.length });
+          tx.onerror = () => reject(tx.error);
+        });
+      }
+    };
+
+    /****************
+     * SRS scheduling
+     ****************/
+    function ensureSrs(card){
+      // basic SM-2-ish fields
+      if (typeof card.ease !== 'number') card.ease = 2.5;
+      if (typeof card.intervalDays !== 'number') card.intervalDays = 0;
+      if (typeof card.reps !== 'number') card.reps = 0;
+      if (typeof card.lapses !== 'number') card.lapses = 0;
+      if (typeof card.dueAt !== 'number') card.dueAt = now();
+      if (typeof card.suspended !== 'boolean') card.suspended = false;
+      if (!card.lastReviewedAt) card.lastReviewedAt = 0;
+      return card;
+    }
+
+    function schedule(card, rating){
+      // rating: 0=Again, 1=Hard, 2=Good, 3=Easy
+      ensureSrs(card);
+      const t = now();
+
+      // suspended cards do nothing
+      if (card.suspended) return card;
+
+      const easeDelta = [ -0.20, -0.15, 0.00, +0.10 ][rating] ?? 0;
+      card.ease = clamp(card.ease + easeDelta, 1.3, 2.8);
+
+      const firstLearn = card.reps === 0;
+
+      if (rating === 0){
+        // Again: short relearn step (10 min), reset reps
+        card.reps = 0;
+        card.lapses += 1;
+        card.intervalDays = 0;
+        card.dueAt = t + 10 * 60 * 1000;
+      } else {
+        // progress
+        card.reps += 1;
+
+        let baseInterval;
+        if (firstLearn){
+          baseInterval = (rating === 1) ? 1 : (rating === 2) ? 2 : 3;
+        } else {
+          const mult = (rating === 1) ? 1.2 : (rating === 2) ? card.ease : (card.ease * 1.35);
+          baseInterval = Math.max(1, Math.round((card.intervalDays || 1) * mult));
+        }
+        card.intervalDays = clamp(baseInterval, 1, 3650);
+        card.dueAt = t + card.intervalDays * dayMs;
+      }
+
+      card.lastReviewedAt = t;
+      return card;
+    }
+
+    /****************
+     * App state/UI
+     ****************/
+    const App = {
+      decks: [],
+      activeDeckId: null,
+      settings: null,
+      stats: null,
+
+      // study session state
+      queue: [],
+      current: null,
+      flipped: false,
+
+      // editor state
+      editingCardId: null,
+
+      installPrompt: null,
+      swReg: null,
+
+      async init(){
+        await DB.open();
+        await this.seedIfEmpty();
+        await this.loadMeta();
+        await this.loadDecks();
+
+        this.bindHeader();
+        this.bindTabs();
+        this.bindDialogs();
+        this.bindKeyboard();
+        this.setupInstall();
+        this.setupSW();
+
+        this.route();
+        window.addEventListener('hashchange', () => this.route());
+      },
+
+      async seedIfEmpty(){
+        const decks = await DB.getDecks();
+        if (decks.length) return;
+
+        const d = await DB.upsertDeck({
+          id: uid(),
+          name: 'Starter (Chinese Basics)',
+          createdAt: now(),
+          updatedAt: now(),
+        });
+
+        const samples = [
+          { front:'你好', pinyin:'ni3 hao3', meaning:'hello; hi', example:'你好！很高兴认识你。' },
+          { front:'谢谢', pinyin:'xie4 xie4', meaning:'thank you', example:'谢谢你的帮助。' },
+          { front:'对', pinyin:'dui4', meaning:'correct; right; (toward)', example:'你说得对。' },
+          { front:'不客气', pinyin:'bu2 ke4 qi4', meaning:"you're welcome", example:'—谢谢！—不客气。' },
+        ];
+
+        for (const s of samples){
+          await DB.upsertCard(ensureSrs({
+            id: uid(),
+            deckId: d.id,
+            front: s.front,
+            pinyin: s.pinyin,
+            meaning: s.meaning,
+            example: s.example,
+            tags: '',
+            notes: '',
+            createdAt: now(),
+            updatedAt: now(),
+            dueAt: now(), // due immediately
+          }));
+        }
+      },
+
+      async loadMeta(){
+        this.settings = await DB.getMeta('settings');
+        this.stats = await DB.getMeta('stats');
+
+        // apply settings to TTS
+        TTS.enabled = !!this.settings.ttsEnabled;
+        TTS.autoSpeakFront = !!this.settings.autoSpeakFront;
+        TTS.autoSpeakBack = !!this.settings.autoSpeakBack;
+
+        // roll daily stats if day changed
+        const dk = new Date().toISOString().slice(0,10);
+        if (this.stats?.dateKey !== dk){
+          this.stats.dateKey = dk;
+          this.stats.reviewedToday = 0;
+          await DB.setMeta('stats', this.stats);
+        }
+      },
+
+      async loadDecks(){
+        this.decks = (await DB.getDecks()).sort((a,b)=> (b.updatedAt||0)-(a.updatedAt||0));
+        if (!this.activeDeckId){
+          this.activeDeckId = this.decks[0]?.id ?? null;
+        }
+        // validate active deck
+        if (this.activeDeckId && !this.decks.some(d=>d.id === this.activeDeckId)){
+          this.activeDeckId = this.decks[0]?.id ?? null;
+        }
+        this.renderDeckSelect();
+      },
+
+      bindHeader(){
+        $('#syncHintBtn').addEventListener('click', async ()=>{
+          const due = await DB.countDue(this.activeDeckId);
+          toast(navigator.onLine ? 'Online. Your data stays local.' : 'Offline. You can still study.', {
+            detail: `Due now: ${due} · Local database (IndexedDB)`,
+            ttl: 4000
+          });
+        });
+
+        $('#deckSelect').addEventListener('change', async (e)=>{
+          this.activeDeckId = e.target.value || null;
+          await this.refreshIfStudy();
+          this.route(true);
+        });
+      },
+
+      renderDeckSelect(){
+        const sel = $('#deckSelect');
+        sel.innerHTML = '';
+        if (!this.decks.length){
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = 'No decks';
+          sel.appendChild(opt);
+          return;
+        }
+        for (const d of this.decks){
+          const opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = d.name;
+          if (d.id === this.activeDeckId) opt.selected = true;
+          sel.appendChild(opt);
+        }
+      },
+
+      bindTabs(){
+        const setActive = () => {
+          const h = (location.hash || '#study').replace('#','');
+          for (const [id, tab] of Object.entries({
+            decks: $('#tabDecks'),
+            study: $('#tabStudy'),
+            add: $('#tabAdd'),
+            search: $('#tabSearch'),
+            settings: $('#tabSettings')
+          })){
+            tab.classList.toggle('active', h.startsWith(id));
+          }
+        };
+        setActive();
+        window.addEventListener('hashchange', setActive);
+      },
+
+      bindDialogs(){
+        const deckDlg = $('#deckDlg');
+        const bulkDlg = $('#bulkDlg');
+        const confirmDlg = $('#confirmDlg');
+
+        const close = (dlg)=> { try{ dlg.close(); }catch{} };
+
+        $('#deckDlgClose').onclick = ()=> close(deckDlg);
+        $('#deckDlgCancel').onclick = ()=> close(deckDlg);
+
+        $('#bulkDlgClose').onclick = ()=> close(bulkDlg);
+        $('#bulkCancel').onclick = ()=> close(bulkDlg);
+
+        $('#confirmClose').onclick = ()=> close(confirmDlg);
+        $('#confirmNo').onclick = ()=> close(confirmDlg);
+      },
+
+      bindKeyboard(){
+        window.addEventListener('keydown', (e)=>{
+          // ignore typing inside inputs
+          const tag = (document.activeElement?.tagName || '').toLowerCase();
+          if (['input','textarea','select'].includes(tag)) return;
+
+          const view = (location.hash || '#study').slice(1);
+          if (view.startsWith('study')){
+            if (e.key === ' '){
+              e.preventDefault();
+              this.onFlip();
+            }
+            if (this.flipped){
+              if (e.key === '1') this.onRate(0);
+              if (e.key === '2') this.onRate(1);
+              if (e.key === '3') this.onRate(2);
+              if (e.key === '4') this.onRate(3);
+            }
+            if (e.key.toLowerCase() === 'a'){
+              const txt = this.current?.front || '';
+              if (txt) TTS.speak(txt);
+            }
+          }
+        });
+      },
+
+      setupInstall(){
+        const btn = $('#installBtn');
+        window.addEventListener('beforeinstallprompt', (e)=>{
+          e.preventDefault();
+          this.installPrompt = e;
+          btn.style.display = '';
+        });
+
+        btn.addEventListener('click', async ()=>{
+          if (!this.installPrompt) return;
+          this.installPrompt.prompt();
+          const res = await this.installPrompt.userChoice;
+          if (res?.outcome === 'accepted'){
+            toast('Installed ✔', { ttl: 2500 });
+          }
+          this.installPrompt = null;
+          btn.style.display = 'none';
+        });
+      },
+
+      async setupSW(){
+        if (!('serviceWorker' in navigator)) return;
+        try{
+          this.swReg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+
+          // update found
+          this.swReg.addEventListener('updatefound', ()=>{
+            const nw = this.swReg.installing;
+            if (!nw) return;
+            nw.addEventListener('statechange', ()=>{
+              if (nw.state === 'installed'){
+                if (navigator.serviceWorker.controller){
+                  toast('Update available', {
+                    detail: 'Tap “Reload” to use the newest version.',
+                    actionText: 'Reload',
+                    onAction: () => location.reload(),
+                    ttl: 0
+                  });
+                } else {
+                  toast('Offline ready ✔', { detail: 'Cached for offline use.', ttl: 2800 });
+                }
+              }
+            });
+          });
+
+          // allow SW to message for skipWaiting reload
+          navigator.serviceWorker.addEventListener('message', (e)=>{
+            if (e.data?.type === 'RELOAD') location.reload();
+          });
+
+        }catch(err){
+          console.warn('SW register failed', err);
+        }
+      },
+
+      async route(soft=false){
+        const hash = (location.hash || '#study').slice(1);
+        const view = $('#view');
+
+        if (!soft){
+          view.innerHTML = '';
+        }
+
+        if (hash.startsWith('decks')) return await this.renderDecks();
+        if (hash.startsWith('study')) return await this.renderStudy();
+        if (hash.startsWith('add')) return await this.renderAdd();
+        if (hash.startsWith('edit/')){
+          const id = hash.split('/')[1];
+          return await this.renderAdd(id);
+        }
+        if (hash.startsWith('search')) return await this.renderSearch();
+        if (hash.startsWith('settings')) return await this.renderSettings();
+
+        location.hash = '#study';
+      },
+
+      async refreshIfStudy(){
+        const hash = (location.hash || '#study').slice(1);
+        if (hash.startsWith('study')){
+          await this.prepareStudyQueue(true);
+          await this.renderStudy(true);
+        }
+      },
+
+      /************
+       * Decks view
+       ************/
+      async renderDecks(){
+        const view = $('#view');
+        const due = await DB.countDue(this.activeDeckId);
+
+        const totalDecks = this.decks.length;
+
+        view.innerHTML = `
+          <div class="grid cols2">
+            <section class="card">
+              <div class="hd">
+                <div>
+                  <h2>Decks</h2>
+                  <div class="meta">${totalDecks} deck(s) · Due in selected deck: ${due}</div>
+                </div>
+                <div class="row">
+                  <button class="btn small primary" id="newDeckBtn">＋ New deck</button>
+                </div>
+              </div>
+              <div class="bd">
+                <div class="list" id="deckList"></div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="hd">
+                <h2>Today</h2>
+                <div class="meta">Progress & shortcuts</div>
+              </div>
+              <div class="bd">
+                <div class="kpi">
+                  <div class="pill"><b>${this.stats.reviewedToday}</b> reviewed</div>
+                  <div class="pill"><b>${this.settings.dailyGoal}</b> daily goal</div>
+                  <div class="pill"><b>${fmtDateTime(this.stats.lastReviewAt)}</b> last review</div>
+                </div>
+                <div class="divider"></div>
+                <div class="hint">
+                  Study shortcuts: <span class="kbd">Space</span> flip ·
+                  <span class="kbd">1</span> again · <span class="kbd">2</span> hard ·
+                  <span class="kbd">3</span> good · <span class="kbd">4</span> easy ·
+                  <span class="kbd">A</span> speak
+                </div>
+                <div class="divider"></div>
+                <div class="row">
+                  <a class="btn primary" href="#study">Start studying →</a>
+                  <a class="btn" href="#add">Add a card →</a>
+                </div>
+              </div>
+            </section>
+          </div>
+        `;
+
+        $('#newDeckBtn').onclick = () => this.openDeckDialog({ mode:'create' });
+        await this.renderDeckList();
+      },
+
+      async renderDeckList(){
+        const list = $('#deckList');
+        list.innerHTML = '';
+
+        for (const d of this.decks){
+          const totalCards = (await DB.getCardsByDeck(d.id)).length;
+          const due = await DB.countDue(d.id);
+          const active = d.id === this.activeDeckId;
+
+          const item = document.createElement('div');
+          item.className = 'item';
+
+          const left = document.createElement('div');
+          left.className = 'left';
+
+          const title = document.createElement('div');
+          title.className = 'title';
+          title.innerHTML = `
+            ${escapeHtml(d.name)}
+            ${active ? '<span class="badge">Selected</span>' : ''}
+            <span class="badge">Due: ${due}</span>
+            <span class="badge">Cards: ${totalCards}</span>
+          `;
+
+          const desc = document.createElement('div');
+          desc.className = 'desc';
+          desc.textContent = `Updated: ${fmtDateTime(d.updatedAt)} · Created: ${fmtDateTime(d.createdAt)}`;
+
+          left.appendChild(title);
+          left.appendChild(desc);
+
+          const right = document.createElement('div');
+          right.className = 'right';
+
+          const selectBtn = document.createElement('button');
+          selectBtn.className = 'btn small';
+          selectBtn.textContent = active ? '✓ Active' : 'Select';
+          selectBtn.onclick = async ()=>{
+            this.activeDeckId = d.id;
+            $('#deckSelect').value = d.id;
+            toast('Deck selected', { detail: d.name, ttl: 2200 });
+            await this.renderDecks();
+          };
+
+          const renameBtn = document.createElement('button');
+          renameBtn.className = 'btn small';
+          renameBtn.textContent = 'Rename';
+          renameBtn.onclick = ()=> this.openDeckDialog({ mode:'edit', deck: d });
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'btn small danger';
+          delBtn.textContent = 'Delete';
+          delBtn.onclick = ()=> this.confirm(
+            'Delete deck?',
+            `This will delete "${d.name}" and ALL its cards. This cannot be undone.`,
+            async ()=>{
+              await DB.deleteDeck(d.id);
+              toast('Deck deleted', { ttl: 2200 });
+              await this.loadDecks();
+              await this.renderDecks();
+            }
+          );
+
+          right.appendChild(selectBtn);
+          right.appendChild(renameBtn);
+          right.appendChild(delBtn);
+
+          item.appendChild(left);
+          item.appendChild(right);
+
+          list.appendChild(item);
+        }
+      },
+
+      openDeckDialog({ mode, deck=null }){
+        const dlg = $('#deckDlg');
+        const title = $('#deckDlgTitle');
+        const input = $('#deckName');
+        const save = $('#deckDlgSave');
+
+        title.textContent = mode === 'create' ? 'New deck' : 'Rename deck';
+        input.value = deck?.name || '';
+        input.focus();
+
+        save.onclick = async ()=>{
+          const name = (input.value || '').trim();
+          if (!name){
+            toast('Deck name is required.', { ttl: 2400 });
+            input.focus();
+            return;
+          }
+          if (mode === 'create'){
+            await DB.upsertDeck({ id: uid(), name, createdAt: now(), updatedAt: now() });
+            toast('Deck created', { detail: name, ttl: 2200 });
+          } else {
+            await DB.upsertDeck({ ...deck, name, updatedAt: now() });
+            toast('Deck renamed', { detail: name, ttl: 2200 });
+          }
+          dlg.close();
+          await this.loadDecks();
+          await this.route(true);
+        };
+
+        dlg.showModal();
+      },
+
+      /************
+       * Study view
+       ************/
+      async prepareStudyQueue(force=false){
+        if (!force && this.queue.length && this.current) return;
+        const dueCards = (await DB.getDueCards(this.activeDeckId, 80, now()))
+          .filter(c => !c.suspended);
+
+        // lightweight shuffle to reduce pattern
+        for (let i = dueCards.length - 1; i > 0; i--){
+          const j = Math.floor(Math.random() * (i + 1));
+          [dueCards[i], dueCards[j]] = [dueCards[j], dueCards[i]];
+        }
+
+        this.queue = dueCards;
+        this.current = this.queue.shift() || null;
+        this.flipped = false;
+      },
+
+      async renderStudy(soft=false){
+        const view = $('#view');
+        await this.prepareStudyQueue(!!soft);
+
+        const dueCount = await DB.countDue(this.activeDeckId);
+        const deckName = this.decks.find(d=>d.id===this.activeDeckId)?.name || '—';
+
+        if (!this.current){
+          view.innerHTML = `
+            <section class="card">
+              <div class="hd">
+                <div>
+                  <h2>Study</h2>
+                  <div class="meta">${escapeHtml(deckName)} · Due now: ${dueCount}</div>
+                </div>
+                <div class="row">
+                  <a class="btn small" href="#add">＋ Add card</a>
+                  <a class="btn small" href="#decks">Manage decks</a>
+                </div>
+              </div>
+              <div class="bd">
+                <div class="flash">
+                  <div class="muted" style="font-size:15px;line-height:1.5">
+                    You’re caught up. 🎉<br>
+                    <span class="muted2">If you want more practice, add cards or study another deck.</span>
+                  </div>
+                  <div class="divider"></div>
+                  <div class="row">
+                    <button class="btn primary" id="refreshStudy">Check again</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          `;
+          $('#refreshStudy').onclick = async ()=>{
+            await this.prepareStudyQueue(true);
+            await this.renderStudy(true);
+          };
+          return;
+        }
+
+        const c = ensureSrs(this.current);
+        const markedPinyin = pinyinToMarked(c.pinyin || '');
+        const sylls = splitPinyinSyllables(c.pinyin || '');
+
+        const showPinyin = !!this.settings.showPinyinOnFront;
+        const showMeaning = !!this.settings.showMeaningOnFront;
+
+        view.innerHTML = `
+          <div class="grid cols2">
+            <section class="flashcard">
+              <div class="topbar">
+                <div class="kpi">
+                  <div class="pill">Deck: <b>${escapeHtml(deckName)}</b></div>
+                  <div class="pill">Due now: <b>${dueCount}</b></div>
+                  <div class="pill">Today: <b>${this.stats.reviewedToday}/${this.settings.dailyGoal}</b></div>
+                </div>
+                <div class="row">
+                  <button class="btn small" id="speakBtn" title="Speak (A)">🔊 Speak<span class="kbd">A</span></button>
+                  <button class="btn small" id="editBtn">✏️ Edit</button>
+                  <button class="btn small" id="suspendBtn">${c.suspended ? '▶️ Unsuspend' : '⏸ Suspend'}</button>
+                </div>
+              </div>
+
+              <div class="content">
+                <div class="hanzi" id="hanziLine"></div>
+
+                <div class="pinyin" id="pinyinLine" style="${showPinyin ? '' : 'display:none'}"></div>
+
+                <div class="meaning" id="meaningLine" style="${(showMeaning && !this.flipped) ? '' : 'display:none'}"></div>
+
+                <div class="example" id="exampleLine" style="${this.flipped ? '' : 'display:none'}"></div>
+              </div>
+
+              <div class="actions" id="studyActions"></div>
+            </section>
+
+            <section class="card">
+              <div class="hd">
+                <div>
+                  <h2>Practice</h2>
+                  <div class="meta">Draw the character (local only)</div>
+                </div>
+                <div class="row">
+                  <button class="btn small" id="clearCanvas">🧽 Clear</button>
+                  <button class="btn small" id="toggleOverlay">👻 Overlay</button>
+                </div>
+              </div>
+              <div class="bd">
+                <div class="practice">
+                  <div class="hint">
+                    Tap/click a character above to copy it.
+                    <br>Tip: Use this panel for handwriting drills.
+                  </div>
+                  <div class="canvas-wrap">
+                    <canvas id="pad" width="1200" height="520" aria-label="Drawing practice canvas"></canvas>
+                    <div class="canvas-overlay" id="overlay"></div>
+                  </div>
+                  <div class="row">
+                    <span class="muted2">Data stays on-device (IndexedDB). Use Export in Settings for backups.</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        `;
+
+        // render hanzi (click per-character copy)
+        const hzLine = $('#hanziLine');
+        const chars = splitHanzi(c.front || '');
+        hzLine.innerHTML = '';
+        chars.forEach((ch, idx)=>{
+          const b = document.createElement('button');
+          b.className = 'hz' + (idx === 0 ? ' main' : '');
+          b.type = 'button';
+          b.title = 'Click to copy';
+          b.textContent = ch;
+          b.onclick = () => copyText(ch);
+          hzLine.appendChild(b);
+        });
+
+        // pinyin line
+        const pLine = $('#pinyinLine');
+        pLine.innerHTML = '';
+        if (markedPinyin){
+          if (this.settings.toneColors){
+            for (const s of sylls){
+              const span = document.createElement('span');
+              span.className = `syll tone${s.tone}`;
+              span.textContent = s.text;
+              pLine.appendChild(span);
+            }
+          } else {
+            const span = document.createElement('span');
+            span.className = 'syll';
+            span.textContent = markedPinyin;
+            pLine.appendChild(span);
+          }
+        }
+
+        // meaning / example
+        $('#meaningLine').textContent = c.meaning || '';
+        $('#exampleLine').textContent = c.example ? `Example: ${c.example}` : '';
+
+        // actions (flip or rate)
+        this.renderStudyActions();
+
+        // buttons
+        $('#speakBtn').onclick = ()=> TTS.speak(c.front || '');
+        $('#editBtn').onclick = ()=> location.hash = '#edit/' + c.id;
+
+        $('#suspendBtn').onclick = async ()=>{
+          c.suspended = !c.suspended;
+          await DB.upsertCard(c);
+          toast(c.suspended ? 'Card suspended' : 'Card unsuspended', { ttl: 2200 });
+          await this.prepareStudyQueue(true);
+          await this.renderStudy(true);
+        };
+
+        // practice canvas
+        this.setupCanvas(chars.join(''));
+        $('#overlay').textContent = chars[0] || '';
+
+        $('#clearCanvas').onclick = ()=> this.clearCanvas();
+        $('#toggleOverlay').onclick = ()=>{
+          this.settings.practiceOverlay = !this.settings.practiceOverlay;
+          DB.setMeta('settings', this.settings);
+          $('#overlay').style.display = this.settings.practiceOverlay ? 'grid' : 'none';
+        };
+        $('#overlay').style.display = this.settings.practiceOverlay ? 'grid' : 'none';
+
+        // optional autospeak
+        if (!this.flipped && TTS.enabled && TTS.autoSpeakFront){
+          TTS.speak(c.front || '');
+        }
+        if (this.flipped && TTS.enabled && TTS.autoSpeakBack){
+          TTS.speak(c.front || '');
+        }
+      },
+
+      renderStudyActions(){
+        const wrap = $('#studyActions');
+        wrap.innerHTML = '';
+
+        if (!this.flipped){
+          const flip = document.createElement('button');
+          flip.className = 'btn primary';
+          flip.innerHTML = `Show answer <span class="kbd">Space</span>`;
+          flip.onclick = ()=> this.onFlip();
+          wrap.appendChild(flip);
+
+          const info = document.createElement('div');
+          info.className = 'hint';
+          info.style.textAlign = 'center';
+          info.innerHTML = `Flip to rate (Again/Hard/Good/Easy).`;
+          wrap.appendChild(info);
+        } else {
+          const row = document.createElement('div');
+          row.className = 'rating';
+
+          const mk = (label, cls, key, rating) => {
+            const b = document.createElement('button');
+            b.className = 'btn ' + cls;
+            b.innerHTML = `${label} <span class="kbd">${key}</span>`;
+            b.onclick = ()=> this.onRate(rating);
+            return b;
+          };
+
+          row.appendChild(mk('Again', 'danger', '1', 0));
+          row.appendChild(mk('Hard', 'warn', '2', 1));
+          row.appendChild(mk('Good', '', '3', 2));
+          row.appendChild(mk('Easy', 'good', '4', 3));
+
+          wrap.appendChild(row);
+
+          // reveal content
+          $('#meaningLine').style.display = '';
+          $('#exampleLine').style.display = this.current?.example ? '' : 'none';
+          $('#pinyinLine').style.display = '';
+        }
+      },
+
+      onFlip(){
+        this.flipped = !this.flipped;
+        this.renderStudyActions();
+        if (this.flipped && TTS.enabled && TTS.autoSpeakBack){
+          TTS.speak(this.current?.front || '');
+        }
+      },
+
+      async onRate(rating){
+        if (!this.current) return;
+        const c = ensureSrs(this.current);
+        schedule(c, rating);
+        await DB.upsertCard(c);
+
+        // update stats
+        const dk = new Date().toISOString().slice(0,10);
+        if (this.stats.dateKey !== dk){
+          this.stats.dateKey = dk;
+          this.stats.reviewedToday = 0;
+        }
+        this.stats.reviewedToday += 1;
+        this.stats.lastReviewAt = now();
+        await DB.setMeta('stats', this.stats);
+
+        // next card
+        this.current = this.queue.shift() || null;
+        this.flipped = false;
+
+        await this.renderStudy(true);
+      },
+
+      /************
+       * Add/Edit view
+       ************/
+      async renderAdd(editId=null){
+        const view = $('#view');
+        this.editingCardId = editId;
+
+        const deckName = this.decks.find(d=>d.id===this.activeDeckId)?.name || '—';
+        let card = null;
+        if (editId){
+          card = await DB.getCard(editId);
+          if (!card){
+            toast('Card not found.', { ttl: 2400 });
+            location.hash = '#search';
+            return;
+          }
+          // if editing card from another deck, switch deck
+          if (card.deckId && card.deckId !== this.activeDeckId){
+            this.activeDeckId = card.deckId;
+            $('#deckSelect').value = card.deckId;
+            await this.loadDecks();
+          }
+        }
+
+        view.innerHTML = `
+          <div class="grid cols2">
+            <section class="card">
+              <div class="hd">
+                <div>
+                  <h2>${editId ? 'Edit card' : 'Add card'}</h2>
+                  <div class="meta">Deck: ${escapeHtml(deckName)}</div>
+                </div>
+                <div class="row">
+                  <button class="btn small" id="bulkBtn">📥 Bulk add</button>
+                  ${editId ? '<button class="btn small danger" id="deleteCardBtn">🗑 Delete</button>' : ''}
+                </div>
+              </div>
+              <div class="bd">
+                <form class="form" id="cardForm">
+                  <div class="field">
+                    <label for="front">Hanzi (front)</label>
+                    <input id="front" required placeholder="对 / 你好 / 谢谢" />
+                  </div>
+
+                  <div class="field">
+                    <label for="pinyin">Pinyin (numbers OK)</label>
+                    <input id="pinyin" placeholder="dui4  /  ni3 hao3" />
+                    <div class="hint">Auto converts: <b>ni3 hao3</b> → <b>nǐ hǎo</b>. Use <b>v</b> or <b>u:</b> for ü (e.g., lv4).</div>
+                  </div>
+
+                  <div class="field">
+                    <label for="meaning">Meaning (back)</label>
+                    <textarea id="meaning" placeholder="correct; right; towards..."></textarea>
+                  </div>
+
+                  <div class="field">
+                    <label for="example">Example sentence (optional)</label>
+                    <textarea id="example" placeholder="你说得对。"></textarea>
+                  </div>
+
+                  <div class="field">
+                    <label for="tags">Tags (optional)</label>
+                    <input id="tags" placeholder="HSK1, grammar, measure-word" />
+                  </div>
+
+                  <div class="field">
+                    <label for="notes">Notes (optional)</label>
+                    <textarea id="notes" placeholder="Anything you want to remember…"></textarea>
+                  </div>
+
+                  <div class="row between">
+                    <div class="hint">
+                      Tip: Keep meaning short. Add nuance in Notes.
+                    </div>
+                    <div class="row">
+                      <button type="button" class="btn" id="previewBtn">👁 Preview</button>
+                      <button type="submit" class="btn primary">${editId ? 'Save changes' : 'Add card'}</button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="hd">
+                <h2>Preview</h2>
+                <div class="meta">What it will look like</div>
+              </div>
+              <div class="bd">
+                <div class="flash">
+                  <div class="hanzi" id="prevHanzi"></div>
+                  <div class="pinyin" id="prevPinyin"></div>
+                  <div class="meaning" id="prevMeaning"></div>
+                  <div class="example" id="prevExample"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+        `;
+
+        // fill form
+        $('#front').value = card?.front || '';
+        $('#pinyin').value = card?.pinyin || '';
+        $('#meaning').value = card?.meaning || '';
+        $('#example').value = card?.example || '';
+        $('#tags').value = card?.tags || '';
+        $('#notes').value = card?.notes || '';
+
+        const renderPreview = ()=>{
+          const front = ($('#front').value || '').trim();
+          const pin = ($('#pinyin').value || '').trim();
+          const meaning = ($('#meaning').value || '').trim();
+          const ex = ($('#example').value || '').trim();
+
+          const hz = $('#prevHanzi');
+          hz.innerHTML = '';
+          splitHanzi(front).forEach((ch, idx)=>{
+            const s = document.createElement('span');
+            s.className = 'hz' + (idx===0 ? ' main':'');
+            s.textContent = ch;
+            hz.appendChild(s);
+          });
+
+          const py = $('#prevPinyin');
+          py.innerHTML = '';
+          const syls = splitPinyinSyllables(pin);
+          if (this.settings.toneColors){
+            syls.forEach(s=>{
+              const span = document.createElement('span');
+              span.className = `syll tone${s.tone}`;
+              span.textContent = s.text;
+              py.appendChild(span);
+            });
+          } else {
+            const span = document.createElement('span');
+            span.className = 'syll';
+            span.textContent = pinyinToMarked(pin);
+            py.appendChild(span);
+          }
+
+          $('#prevMeaning').textContent = meaning;
+          $('#prevExample').textContent = ex ? `Example: ${ex}` : '';
+        };
+
+        renderPreview();
+        $('#previewBtn').onclick = renderPreview;
+        ['front','pinyin','meaning','example'].forEach(id=>{
+          $('#'+id).addEventListener('input', () => renderPreview());
+        });
+
+        $('#bulkBtn').onclick = ()=> this.openBulkAdd();
+
+        if (editId){
+          $('#deleteCardBtn').onclick = ()=> this.confirm(
+            'Delete card?',
+            `This card will be permanently deleted.`,
+            async ()=>{
+              await DB.deleteCard(editId);
+              toast('Card deleted', { ttl: 2200 });
+              location.hash = '#search';
+            }
+          );
+        }
+
+        $('#cardForm').onsubmit = async (e)=>{
+          e.preventDefault();
+
+          const front = ($('#front').value || '').trim();
+          if (!front){
+            toast('Hanzi is required.', { ttl: 2400 });
+            return;
+          }
+
+          const cardData = ensureSrs({
+            id: editId || uid(),
+            deckId: this.activeDeckId,
+            front,
+            pinyin: ($('#pinyin').value || '').trim(),
+            meaning: ($('#meaning').value || '').trim(),
+            example: ($('#example').value || '').trim(),
+            tags: ($('#tags').value || '').trim(),
+            notes: ($('#notes').value || '').trim(),
+            createdAt: card?.createdAt || now(),
+            updatedAt: now(),
+            dueAt: card?.dueAt ?? now()
+          });
+
+          await DB.upsertCard(cardData);
+          toast(editId ? 'Card updated' : 'Card added', { ttl: 2200 });
+
+          if (!editId){
+            // reset minimal fields for faster entry
+            $('#front').value = '';
+            $('#pinyin').value = '';
+            $('#meaning').value = '';
+            $('#example').value = '';
+            $('#tags').value = '';
+            $('#notes').value = '';
+            renderPreview();
+            $('#front').focus();
+          } else {
+            location.hash = '#study';
+          }
+        };
+      },
+
+      openBulkAdd(){
+        const dlg = $('#bulkDlg');
+        $('#bulkText').value = '';
+        dlg.showModal();
+
+        $('#bulkImport').onclick = async ()=>{
+          const raw = ($('#bulkText').value || '').trim();
+          if (!raw){
+            toast('Nothing to import.', { ttl: 2200 });
+            return;
+          }
+          const lines = raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+
+          let added = 0;
+          for (const line of lines){
+            // support TAB or " | "
+            let parts = line.split('\t');
+            if (parts.length < 3) parts = line.split('|').map(s=>s.trim());
+            if (parts.length < 2) continue;
+
+            const front = (parts[0] || '').trim();
+            const pinyin = (parts[1] || '').trim();
+            const meaning = (parts.slice(2).join(' ') || '').trim();
+
+            if (!front) continue;
+
+            await DB.upsertCard(ensureSrs({
+              id: uid(),
+              deckId: this.activeDeckId,
+              front,
+              pinyin,
+              meaning,
+              example: '',
+              tags: '',
+              notes: '',
+              createdAt: now(),
+              updatedAt: now(),
+              dueAt: now()
+            }));
+            added++;
+          }
+
+          dlg.close();
+          toast('Bulk add complete', { detail: `${added} card(s) added`, ttl: 3000 });
+          if ((location.hash || '#').includes('study')){
+            await this.refreshIfStudy();
+          }
+        };
+      },
+
+      /************
+       * Search view
+       ************/
+      async renderSearch(){
+        const view = $('#view');
+        const deckName = this.decks.find(d=>d.id===this.activeDeckId)?.name || '—';
+
+        view.innerHTML = `
+          <section class="card">
+            <div class="hd">
+              <div>
+                <h2>Search</h2>
+                <div class="meta">Deck: ${escapeHtml(deckName)} · Search Hanzi / Pinyin / Meaning / Tags</div>
+              </div>
+              <div class="row">
+                <a class="btn small" href="#add">＋ Add</a>
+              </div>
+            </div>
+            <div class="bd">
+              <div class="form">
+                <div class="field">
+                  <label for="q">Query</label>
+                  <input id="q" placeholder="e.g., 对 / dui4 / correct / HSK1" />
+                </div>
+                <div class="row between">
+                  <div class="row">
+                    <button class="btn primary" id="goSearch">Search</button>
+                    <button class="btn" id="clearSearch">Clear</button>
+                  </div>
+                  <div class="hint">Tip: Click a Hanzi to copy it (in Study).</div>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+              <div class="list" id="results"></div>
+            </div>
+          </section>
+        `;
+
+        const run = async ()=>{
+          const q = ($('#q').value || '').trim().toLowerCase();
+          const cards = await DB.getCardsByDeck(this.activeDeckId);
+          const filtered = !q ? cards : cards.filter(c=>{
+            const hay = [
+              c.front, c.pinyin, pinyinToMarked(c.pinyin||''), c.meaning, c.example, c.tags, c.notes
+            ].join(' ').toLowerCase();
+            return hay.includes(q);
+          }).sort((a,b)=> (b.updatedAt||0)-(a.updatedAt||0));
+
+          const res = $('#results');
+          res.innerHTML = '';
+          if (!filtered.length){
+            res.innerHTML = `<div class="muted">No matches.</div>`;
+            return;
+          }
+
+          for (const c of filtered.slice(0, 250)){
+            const item = document.createElement('div');
+            item.className = 'item';
+
+            const left = document.createElement('div');
+            left.className = 'left';
+
+            const title = document.createElement('div');
+            title.className = 'title';
+            title.innerHTML = `
+              ${escapeHtml(c.front || '—')}
+              <span class="badge">Due: ${fmtDateTime(c.dueAt)}</span>
+              ${c.suspended ? '<span class="badge">Suspended</span>' : ''}
+            `;
+
+            const desc = document.createElement('div');
+            desc.className = 'desc';
+            const pin = pinyinToMarked(c.pinyin||'');
+            desc.textContent = `${pin ? (pin + ' · ') : ''}${c.meaning || ''}`;
+
+            left.appendChild(title);
+            left.appendChild(desc);
+
+            const right = document.createElement('div');
+            right.className = 'right';
+
+            const edit = document.createElement('a');
+            edit.className = 'btn small';
+            edit.href = '#edit/' + c.id;
+            edit.textContent = 'Edit';
+
+            const study = document.createElement('a');
+            study.className = 'btn small primary';
+            study.href = '#study';
+            study.textContent = 'Study';
+
+            right.appendChild(edit);
+            right.appendChild(study);
+
+            item.appendChild(left);
+            item.appendChild(right);
+
+            res.appendChild(item);
+          }
+        };
+
+        $('#goSearch').onclick = run;
+        $('#clearSearch').onclick = ()=>{ $('#q').value=''; run(); };
+        $('#q').addEventListener('keydown', (e)=>{ if (e.key==='Enter') run(); });
+
+        run();
+      },
+
+      /************
+       * Settings view
+       ************/
+      async renderSettings(){
+        const view = $('#view');
+
+        const due = await DB.countDue(this.activeDeckId);
+        const totalCards = (await DB.getCardsByDeck(this.activeDeckId)).length;
+
+        view.innerHTML = `
+          <div class="grid cols2">
+            <section class="card">
+              <div class="hd">
+                <h2>Settings</h2>
+                <div class="meta">Local-only app (offline-first)</div>
+              </div>
+              <div class="bd">
+                <div class="form">
+                  <div class="field">
+                    <label for="goal">Daily goal</label>
+                    <input id="goal" type="number" min="1" max="999" value="${this.settings.dailyGoal}" />
+                  </div>
+
+                  <div class="field">
+                    <label>
+                      <span>Show pinyin on front</span>
+                      <input id="showPinyinOnFront" type="checkbox" ${this.settings.showPinyinOnFront ? 'checked':''} />
+                    </label>
+                  </div>
+
+                  <div class="field">
+                    <label>
+                      <span>Use tone colors</span>
+                      <input id="toneColors" type="checkbox" ${this.settings.toneColors ? 'checked':''} />
+                    </label>
+                  </div>
+
+                  <div class="field">
+                    <label>
+                      <span>TTS enabled</span>
+                      <input id="ttsEnabled" type="checkbox" ${this.settings.ttsEnabled ? 'checked':''} />
+                    </label>
+                    <div class="hint">Uses your browser voices (SpeechSynthesis). Best on Chrome/Edge.</div>
+                  </div>
+
+                  <div class="field">
+                    <label>
+                      <span>Auto-speak on front</span>
+                      <input id="autoSpeakFront" type="checkbox" ${this.settings.autoSpeakFront ? 'checked':''} />
+                    </label>
+                  </div>
+
+                  <div class="field">
+                    <label>
+                      <span>Auto-speak after flip</span>
+                      <input id="autoSpeakBack" type="checkbox" ${this.settings.autoSpeakBack ? 'checked':''} />
+                    </label>
+                  </div>
+
+                  <div class="divider"></div>
+
+                  <div class="row">
+                    <button class="btn primary" id="saveSettings">Save</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="hd">
+                <h2>Backup & Data</h2>
+                <div class="meta">Export/import your decks</div>
+              </div>
+              <div class="bd">
+                <div class="kpi">
+                  <div class="pill">Selected deck cards: <b>${totalCards}</b></div>
+                  <div class="pill">Due now: <b>${due}</b></div>
+                  <div class="pill">Reviewed today: <b>${this.stats.reviewedToday}</b></div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="row">
+                  <button class="btn primary" id="exportBtn">⬇️ Export backup</button>
+                  <label class="btn" for="importFile">⬆️ Import backup</label>
+                  <input id="importFile" type="file" accept="application/json" class="sr-only" />
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="row">
+                  <button class="btn danger" id="wipeBtn">🧨 Wipe ALL data</button>
+                </div>
+
+                <div class="hint" style="margin-top:10px">
+                  Export creates a JSON file with all decks/cards. Import merges by id (upserts).
+                </div>
+              </div>
+            </section>
+          </div>
+        `;
+
+        $('#saveSettings').onclick = async ()=>{
+          const s = this.settings;
+          s.dailyGoal = clamp(parseInt($('#goal').value || '30', 10), 1, 999);
+          s.showPinyinOnFront = $('#showPinyinOnFront').checked;
+          s.toneColors = $('#toneColors').checked;
+          s.ttsEnabled = $('#ttsEnabled').checked;
+          s.autoSpeakFront = $('#autoSpeakFront').checked;
+          s.autoSpeakBack = $('#autoSpeakBack').checked;
+
+          await DB.setMeta('settings', s);
+          await this.loadMeta();
+
+          toast('Settings saved', { ttl: 2200 });
+        };
+
+        $('#exportBtn').onclick = async ()=>{
+          const data = await DB.exportAll();
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `hanzicards-backup-${new Date().toISOString().slice(0,10)}.json`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(()=> URL.revokeObjectURL(a.href), 2500);
+          toast('Exported backup', { ttl: 2500 });
+        };
+
+        $('#importFile').onchange = async (e)=>{
+          const f = e.target.files?.[0];
+          if (!f) return;
+          try{
+            const txt = await f.text();
+            const data = JSON.parse(txt);
+            const res = await DB.importAll(data, 'merge');
+            toast('Import complete', { detail: `Decks: ${res.decks} · Cards: ${res.cards}`, ttl: 4200 });
+            await this.loadMeta();
+            await this.loadDecks();
+            await this.route(true);
+          }catch(err){
+            console.error(err);
+            toast('Import failed', { detail: 'Invalid JSON or corrupted file.', ttl: 4500 });
+          }finally{
+            e.target.value = '';
+          }
+        };
+
+        $('#wipeBtn').onclick = ()=> this.confirm(
+          'Wipe ALL data?',
+          'This deletes every deck, card, and setting stored on this device. This cannot be undone.',
+          async ()=>{
+            await this.wipeAllData();
+            toast('Data wiped', { ttl: 2500 });
+            location.reload();
+          }
+        );
+      },
+
+      async wipeAllData(){
+        if (this.swReg){
+          try{
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+          }catch{}
+        }
+        await new Promise((resolve)=>{
+          const req = indexedDB.deleteDatabase(DB.name);
+          req.onsuccess = () => resolve(true);
+          req.onerror = () => resolve(true);
+          req.onblocked = () => resolve(true);
+        });
+      },
+
+      confirm(title, msg, onYes){
+        const dlg = $('#confirmDlg');
+        $('#confirmTitle').textContent = title;
+        $('#confirmMsg').textContent = msg;
+
+        $('#confirmYes').onclick = async ()=>{
+          dlg.close();
+          await onYes?.();
+        };
+
+        dlg.showModal();
+      },
+
+      /********************
+       * Practice canvas
+       ********************/
+      pad: null,
+      ctx: null,
+      drawing: false,
+      lastPt: null,
+
+      setupCanvas(overlayChar){
+        this.pad = $('#pad');
+        this.ctx = this.pad.getContext('2d', { alpha: true });
+
+        // crisp strokes on high DPI
+        const rect = this.pad.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const w = Math.floor(rect.width * dpr);
+        const h = Math.floor(rect.height * dpr);
+        if (this.pad.width !== w || this.pad.height !== h){
+          this.pad.width = w;
+          this.pad.height = h;
+        }
+        this.ctx.lineCap = 'round';
+        this.ctx.lineJoin = 'round';
+        this.ctx.lineWidth = 10 * dpr;
+        this.ctx.strokeStyle = 'rgba(241,245,249,.92)';
+
+        $('#overlay').textContent = overlayChar || '';
+        $('#overlay').style.display = this.settings.practiceOverlay ? 'grid' : 'none';
+
+        const getPos = (ev)=>{
+          const r = this.pad.getBoundingClientRect();
+          const x = (ev.clientX - r.left) * (this.pad.width / r.width);
+          const y = (ev.clientY - r.top) * (this.pad.height / r.height);
+          return {x,y};
+        };
+
+        const down = (ev)=>{
+          this.drawing = true;
+          this.lastPt = getPos(ev);
+          this.ctx.beginPath();
+          this.ctx.moveTo(this.lastPt.x, this.lastPt.y);
+        };
+
+        const move = (ev)=>{
+          if (!this.drawing) return;
+          const p = getPos(ev);
+          // simple smoothing
+          const mid = { x: (this.lastPt.x + p.x)/2, y:(this.lastPt.y + p.y)/2 };
+          this.ctx.quadraticCurveTo(this.lastPt.x, this.lastPt.y, mid.x, mid.y);
+          this.ctx.stroke();
+          this.lastPt = p;
+        };
+
+        const up = ()=>{
+          this.drawing = false;
+          this.lastPt = null;
+        };
+
+        // pointer events
+        this.pad.onpointerdown = (ev)=>{ this.pad.setPointerCapture(ev.pointerId); down(ev); };
+        this.pad.onpointermove = move;
+        this.pad.onpointerup = up;
+        this.pad.onpointercancel = up;
+        this.pad.onpointerleave = up;
+      },
+
+      clearCanvas(){
+        if (!this.ctx || !this.pad) return;
+        this.ctx.clearRect(0,0,this.pad.width,this.pad.height);
+      },
+    };
+
+    function escapeHtml(s){
+      return (s ?? '').toString()
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'","&#039;");
+    }
+
+    // boot
+    (async ()=>{
+      try{
+        // voices load async in some browsers
+        if ('speechSynthesis' in window){
+          window.speechSynthesis.onvoiceschanged = ()=>{};
+        }
+        await App.init();
+      }catch(err){
+        console.error(err);
+        toast('App failed to start', { detail: String(err?.message || err), ttl: 0 });
+      }
+    })();
+  </script>
+</body>
+</html>
