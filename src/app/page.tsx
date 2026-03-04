@@ -122,6 +122,22 @@ export default function ChineseFlashcardApp() {
   const [newCardExamplePinyin, setNewCardExamplePinyin] = useState('');
   const [newCardExampleTranslation, setNewCardExampleTranslation] = useState('');
   const [isAutoFetching, setIsAutoFetching] = useState(false);
+  
+  // Sentence analysis state
+  const [sentenceAnalysis, setSentenceAnalysis] = useState<{
+    sentence: string;
+    translation: string;
+    segments: Array<{
+      word: string;
+      pinyin: string;
+      meaning: string;
+      startIndex: number;
+      endIndex: number;
+    }>;
+    characters: Array<{ char: string; pinyin: string; meaning: string }>;
+  } | null>(null);
+  const [hoveredSegment, setHoveredSegment] = useState<number | null>(null);
+  const [isAnalyzingSentence, setIsAnalyzingSentence] = useState(false);
 
   // Toast state
   const [toast, setToast] = useState<string | null>(null);
@@ -257,6 +273,42 @@ export default function ChineseFlashcardApp() {
       showToast('Could not fetch character info');
     } finally {
       setIsAutoFetching(false);
+    }
+  };
+
+  // Analyze sentence
+  const handleAnalyzeSentence = async () => {
+    if (!newCardExample.trim()) {
+      showToast('Please enter a sentence first');
+      return;
+    }
+
+    setIsAnalyzingSentence(true);
+    try {
+      const response = await fetch('/api/analyze-sentence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sentence: newCardExample.trim() }),
+      });
+
+      if (!response.ok) throw new Error('Analysis failed');
+
+      const analysis = await response.json();
+      setSentenceAnalysis(analysis);
+
+      if (analysis.translation) {
+        if (!newCardExampleTranslation) {
+          setNewCardExampleTranslation(analysis.translation);
+        }
+        showToast('Sentence analyzed successfully');
+      } else {
+        showToast('Could not analyze sentence');
+      }
+    } catch (error) {
+      console.error('Sentence analysis failed:', error);
+      showToast('Could not analyze sentence');
+    } finally {
+      setIsAnalyzingSentence(false);
     }
   };
 
@@ -783,7 +835,70 @@ export default function ChineseFlashcardApp() {
                           rows={2}
                         />
                       </div>
-                      <div className="grid gap-4 md:grid-cols-2">
+
+                      {/* Analyze sentence button */}
+                      <div className="flex items-center gap-2 pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAnalyzeSentence}
+                          disabled={isAnalyzingSentence || !newCardExample.trim()}
+                          className="bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20"
+                        >
+                          {isAnalyzingSentence ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <Wand2 className="w-4 h-4 mr-2" />
+                          )}
+                          Analyze Sentence
+                        </Button>
+                        <span className="text-xs text-slate-500">
+                          Break down sentence structure
+                        </span>
+                      </div>
+
+                      {/* Sentence analysis display */}
+                      {sentenceAnalysis && sentenceAnalysis.sentence === newCardExample && (
+                        <div className="mt-4 p-3 bg-slate-800/50 border border-blue-500/30 rounded-lg">
+                          <div className="mb-3">
+                            <p className="text-xs text-slate-400 mb-1">Sentence Structure:</p>
+                            <div className="flex flex-wrap gap-1 items-baseline">
+                              {sentenceAnalysis.segments.map((segment, idx) => (
+                                <div
+                                  key={idx}
+                                  className="relative group cursor-help"
+                                  onMouseEnter={() => setHoveredSegment(idx)}
+                                  onMouseLeave={() => setHoveredSegment(null)}
+                                >
+                                  <span
+                                    className={`px-2 py-1 rounded text-sm font-medium transition-colors ${
+                                      hoveredSegment === idx
+                                        ? 'bg-blue-500/30 border-blue-400'
+                                        : 'border-b-2 border-dashed border-blue-400/50'
+                                    }`}
+                                  >
+                                    {segment.word}
+                                  </span>
+                                  {hoveredSegment === idx && (
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-white whitespace-nowrap z-10 pointer-events-none">
+                                      {segment.meaning}
+                                      {segment.pinyin && <div className="text-blue-300">{segment.pinyin}</div>}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          {sentenceAnalysis.translation && (
+                            <div>
+                              <p className="text-xs text-slate-400 mb-1">Overall translation:</p>
+                              <p className="text-sm text-blue-300">{sentenceAnalysis.translation}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="grid gap-4 md:grid-cols-2 pt-3">
                         <div className="space-y-2">
                           <Label htmlFor="examplePinyin">Example Pinyin</Label>
                           <Input
@@ -822,6 +937,7 @@ export default function ChineseFlashcardApp() {
                         setNewCardExample('');
                         setNewCardExamplePinyin('');
                         setNewCardExampleTranslation('');
+                        setSentenceAnalysis(null);
                       }}
                     >
                       Clear
