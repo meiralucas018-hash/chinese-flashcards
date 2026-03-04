@@ -237,20 +237,7 @@ export default function ChineseFlashcardApp() {
 
       let infoFetched = false;
 
-      // Auto-fill pinyin and meaning if found
-      if (results.characters && results.characters.length > 0) {
-        const mainChar = results.characters[0];
-        if (!newCardPinyin && mainChar.pinyin) {
-          setNewCardPinyin(mainChar.pinyin);
-          infoFetched = true;
-        }
-        if (!newCardMeaning && mainChar.meaning) {
-          setNewCardMeaning(mainChar.meaning);
-          infoFetched = true;
-        }
-      }
-
-      // If it's a word, use word info
+      // Check for word matches first
       if (results.words && results.words.length > 0) {
         const mainWord = results.words[0];
         if (!newCardPinyin && mainWord.pinyin) {
@@ -263,10 +250,29 @@ export default function ChineseFlashcardApp() {
         }
       }
 
+      // If no word match, try individual character (only for single character input)
+      if (!infoFetched && newCardFront.trim().length === 1 && results.characters && results.characters.length > 0) {
+        const mainChar = results.characters[0];
+        if (!newCardPinyin && mainChar.pinyin) {
+          setNewCardPinyin(mainChar.pinyin);
+          infoFetched = true;
+        }
+        if (!newCardMeaning && mainChar.meaning) {
+          setNewCardMeaning(mainChar.meaning);
+          infoFetched = true;
+        }
+      }
+
+      // If input is multiple characters but no word match found
+      if (!infoFetched && newCardFront.trim().length > 1) {
+        showToast('This is a phrase - move it to the Example field and use "Analyze Sentence Structure" button to break it down into words');
+        return;
+      }
+
       if (infoFetched) {
         showToast('Character info fetched successfully');
       } else {
-        showToast('Characters found, but meanings not available. Please configure API or enter manually.');
+        showToast('Characters found, but meanings not available. Please enter manually.');
       }
     } catch (error) {
       console.error('Auto-fetch failed:', error);
@@ -837,23 +843,22 @@ export default function ChineseFlashcardApp() {
                       </div>
 
                       {/* Analyze sentence button */}
-                      <div className="flex items-center gap-2 pt-2">
+                      <div className="flex items-center gap-2 pt-3 pb-3 border-b border-slate-600">
                         <Button
                           variant="outline"
-                          size="sm"
                           onClick={handleAnalyzeSentence}
                           disabled={isAnalyzingSentence || !newCardExample.trim()}
-                          className="bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20"
+                          className="bg-blue-500/20 border-blue-500/50 text-blue-300 hover:bg-blue-500/30"
                         >
                           {isAnalyzingSentence ? (
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                           ) : (
                             <Wand2 className="w-4 h-4 mr-2" />
                           )}
-                          Analyze Sentence
+                          Analyze Sentence Structure
                         </Button>
-                        <span className="text-xs text-slate-500">
-                          Break down sentence structure
+                        <span className="text-xs text-slate-400">
+                          Auto-detect words and show meaning breakdown
                         </span>
                       </div>
 
