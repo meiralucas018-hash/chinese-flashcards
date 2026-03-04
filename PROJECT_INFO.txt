@@ -1,0 +1,54 @@
+===========================================
+CHINESE FLASHCARDS PROJECT - QUICK REFERENCE
+===========================================
+
+WEBSITE LINK:
+https://chinese-flashcards-swart.vercel.app/
+
+PUSH COMMAND (to update the website):
+git push origin main
+
+===========================================
+FILES TO EDIT FOR MODIFICATIONS:
+===========================================
+
+HOME PAGE & LAYOUT:
+  - Home page content/layout: src/app/page.tsx
+  - Navigation, header, footer: src/app/layout.tsx
+
+FLASHCARD COMPONENTS:
+  - Flashcard logic: src/components/flashcard/Flashcard.tsx
+  - Character practice features: src/components/flashcard/PracticeCanvas.tsx
+  - Character breakdown display: src/components/flashcard/CharacterBreakdown.tsx
+
+UI COMPONENTS:
+  - UI components (buttons, cards, etc.): src/components/ui/
+
+API & DATABASE:
+  - API endpoints: src/app/api/
+  - Database schema: prisma/schema.prisma
+
+STYLING & CONFIG:
+  - Styling (colors, fonts): tailwind.config.ts
+  - Dependencies: package.json
+
+===========================================
+TYPICAL WORKFLOW:
+===========================================
+
+1. Edit files in src/ (React components, pages, logic)
+2. Test locally: bun run dev
+3. Open http://localhost:3000 in your browser
+4. When ready, commit and push:
+   git push origin main
+5. Vercel auto-deploys within seconds
+
+===========================================
+TO ADD NEW FEATURES:
+===========================================
+
+- New pages: Create in src/app/
+- New components: Create in src/components/
+- New API routes: Create in src/app/api/
+
+===========================================
