@@ -219,14 +219,18 @@ export default function ChineseFlashcardApp() {
 
       const results = await response.json();
 
+      let infoFetched = false;
+
       // Auto-fill pinyin and meaning if found
       if (results.characters && results.characters.length > 0) {
         const mainChar = results.characters[0];
         if (!newCardPinyin && mainChar.pinyin) {
           setNewCardPinyin(mainChar.pinyin);
+          infoFetched = true;
         }
         if (!newCardMeaning && mainChar.meaning) {
           setNewCardMeaning(mainChar.meaning);
+          infoFetched = true;
         }
       }
 
@@ -235,13 +239,19 @@ export default function ChineseFlashcardApp() {
         const mainWord = results.words[0];
         if (!newCardPinyin && mainWord.pinyin) {
           setNewCardPinyin(mainWord.pinyin);
+          infoFetched = true;
         }
         if (!newCardMeaning && mainWord.meaning) {
           setNewCardMeaning(mainWord.meaning);
+          infoFetched = true;
         }
       }
 
-      showToast('Character info fetched successfully');
+      if (infoFetched) {
+        showToast('Character info fetched successfully');
+      } else {
+        showToast('Characters found, but meanings not available. Please configure API or enter manually.');
+      }
     } catch (error) {
       console.error('Auto-fetch failed:', error);
       showToast('Could not fetch character info');

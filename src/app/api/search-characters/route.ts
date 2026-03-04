@@ -37,7 +37,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 });
     }
 
-    const zai = await ZAI.create();
+    let zai;
+    try {
+      zai = await ZAI.create();
+    } catch (error) {
+      console.error('ZAI initialization failed:', error);
+      // Fallback: return basic character breakdown without meanings
+      const chars = query.match(/[\u4e00-\u9fff]/g) || [];
+      const result = {
+        characters: chars.map(char => ({
+          char,
+          pinyin: '',
+          meaning: 'API not configured - please set up ZAI config',
+        })),
+        words: [],
+        sentences: [],
+      };
+      return NextResponse.json(result);
+    }
 
     // Search the web for Chinese character/word meanings
     const searchQuery = type === 'sentence' 
