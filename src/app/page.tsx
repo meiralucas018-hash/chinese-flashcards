@@ -218,40 +218,35 @@ export default function ChineseFlashcardApp() {
 
   // Auto-fetch character meanings from web
   const handleAutoFetch = async () => {
-    if (!newCardFront.trim()) {
+    const inputText = newCardFront.trim();
+    
+    if (!inputText) {
       showToast('Please enter Chinese character(s) first');
       return;
     }
 
+    // Check input length BEFORE making the API call
+    if (inputText.length > 1) {
+      showToast('ℹ️ For phrases/multiple characters: Add it to "Example Sentence" field and click "Analyze Sentence Structure" button');
+      return;
+    }
+
+    // Only proceed for single characters
     setIsAutoFetching(true);
     try {
       const response = await fetch('/api/search-characters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: newCardFront.trim() }),
+        body: JSON.stringify({ query: inputText }),
       });
 
       if (!response.ok) throw new Error('Auto-fetch failed');
 
       const results = await response.json();
-
       let infoFetched = false;
 
-      // Check for word matches first
-      if (results.words && results.words.length > 0) {
-        const mainWord = results.words[0];
-        if (!newCardPinyin && mainWord.pinyin) {
-          setNewCardPinyin(mainWord.pinyin);
-          infoFetched = true;
-        }
-        if (!newCardMeaning && mainWord.meaning) {
-          setNewCardMeaning(mainWord.meaning);
-          infoFetched = true;
-        }
-      }
-
-      // If no word match, try individual character (only for single character input)
-      if (!infoFetched && newCardFront.trim().length === 1 && results.characters && results.characters.length > 0) {
+      // For single character, get the first matching result
+      if (results.characters && results.characters.length > 0) {
         const mainChar = results.characters[0];
         if (!newCardPinyin && mainChar.pinyin) {
           setNewCardPinyin(mainChar.pinyin);
@@ -263,20 +258,14 @@ export default function ChineseFlashcardApp() {
         }
       }
 
-      // If input is multiple characters but no word match found
-      if (!infoFetched && newCardFront.trim().length > 1) {
-        showToast('This is a phrase - move it to the Example field and use "Analyze Sentence Structure" button to break it down into words');
-        return;
-      }
-
       if (infoFetched) {
-        showToast('Character info fetched successfully');
+        showToast('✓ Character info fetched successfully');
       } else {
-        showToast('Characters found, but meanings not available. Please enter manually.');
+        showToast('⚠️ Character found, but meaning not in database. Please enter manually.');
       }
     } catch (error) {
       console.error('Auto-fetch failed:', error);
-      showToast('Could not fetch character info');
+      showToast('❌ Could not fetch character info');
     } finally {
       setIsAutoFetching(false);
     }
