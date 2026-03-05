@@ -27,7 +27,7 @@
 
 4. **Sincronize com Capacitor:**
    ```sh
-   npm run cap:sync
+   npx cap sync android
    ```
 
 5. **Abra o projeto Android:**
@@ -49,7 +49,7 @@
 
 ## Observações
 - O app funciona offline-first, usando IndexedDB/localStorage.
-- APIs de busca/análise de frases foram migradas para client-side.
+- APIs de busca/análise de frases foram migradas para client-side (veja src/lib/cedict.ts).
 - SSR/server features foram removidas para compatibilidade com exportação estática.
 
 ## Dúvidas?

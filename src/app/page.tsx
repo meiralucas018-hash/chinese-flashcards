@@ -219,33 +219,19 @@ export default function ChineseFlashcardApp() {
   // Auto-fetch character meanings from web
   const handleAutoFetch = async () => {
     const inputText = newCardFront.trim();
-    
     if (!inputText) {
       showToast('Please enter Chinese character(s) first');
       return;
     }
-
-    // Check input length BEFORE making the API call
     if (inputText.length > 1) {
       showToast('ℹ️ For phrases/multiple characters: Add it to "Example Sentence" field and click "Analyze Sentence Structure" button');
       return;
     }
-
-    // Only proceed for single characters
     setIsAutoFetching(true);
     try {
-      const response = await fetch('/api/search-characters', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: inputText }),
-      });
-
-      if (!response.ok) throw new Error('Auto-fetch failed');
-
-      const results = await response.json();
+      const index = await loadCedict();
+      const results = searchCedict(inputText, index);
       let infoFetched = false;
-
-      // For single character, get the first matching result
       if (results.characters && results.characters.length > 0) {
         const mainChar = results.characters[0];
         if (!newCardPinyin && mainChar.pinyin) {
@@ -257,7 +243,6 @@ export default function ChineseFlashcardApp() {
           infoFetched = true;
         }
       }
-
       if (infoFetched) {
         showToast('✓ Character info fetched successfully');
       } else {
@@ -277,28 +262,25 @@ export default function ChineseFlashcardApp() {
       showToast('Please enter a sentence first');
       return;
     }
-
     setIsAnalyzingSentence(true);
     try {
-      const response = await fetch('/api/analyze-sentence', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sentence: newCardExample.trim() }),
+      const index = await loadCedict();
+      // segmentSentence returns array of segments (words/characters)
+      const segments = segmentSentence(newCardExample.trim(), index);
+      // Compose a basic analysis result
+      setSentenceAnalysis({
+        sentence: newCardExample.trim(),
+        translation: '', // No translation available client-side
+        segments: segments.map((seg, i) => ({
+          word: seg.word,
+          pinyin: seg.pinyin,
+          meaning: seg.meaning,
+          startIndex: seg.startIndex ?? 0,
+          endIndex: seg.endIndex ?? 0,
+        })),
+        characters: segments.flatMap(seg => seg.chars || []),
       });
-
-      if (!response.ok) throw new Error('Analysis failed');
-
-      const analysis = await response.json();
-      setSentenceAnalysis(analysis);
-
-      if (analysis.translation) {
-        if (!newCardExampleTranslation) {
-          setNewCardExampleTranslation(analysis.translation);
-        }
-        showToast('Sentence analyzed successfully');
-      } else {
-        showToast('Could not analyze sentence');
-      }
+      showToast('Sentence analyzed successfully');
     } catch (error) {
       console.error('Sentence analysis failed:', error);
       showToast('Could not analyze sentence');
@@ -418,18 +400,10 @@ export default function ChineseFlashcardApp() {
   // Search operations
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
-
     setIsSearching(true);
     try {
-      const response = await fetch('/api/search-characters', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: searchQuery.trim() }),
-      });
-
-      if (!response.ok) throw new Error('Search failed');
-
-      const results = await response.json();
+      const index = await loadCedict();
+      const results = searchCedict(searchQuery.trim(), index);
       setSearchResults(results);
     } catch (error) {
       console.error('Search failed:', error);
