@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Chinese Flashcards</string>
+    <string name="title_activity_main">Chinese Flashcards</string>
+    <string name="package_name">com.neon.chineseflashcards</string>
+    <string name="custom_url_scheme">com.neon.chineseflashcards</string>
+</resources>

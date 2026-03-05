@@ -48,16 +48,18 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
     setIsFlipped(false);
   }, []);
 
+  const isTTSAvailable = typeof window !== 'undefined' && 'speechSynthesis' in window;
   const handleTTS = useCallback(() => {
+    if (!isTTSAvailable) return;
     if (onTTS && card.front) {
       onTTS(card.front);
-    } else if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(card.front);
+    } else {
+      const utterance = new window.SpeechSynthesisUtterance(card.front);
       utterance.lang = 'zh-CN';
       utterance.rate = 0.8;
-      speechSynthesis.speak(utterance);
+      window.speechSynthesis.speak(utterance);
     }
-  }, [card.front, onTTS]);
+  }, [card.front, onTTS, isTTSAvailable]);
 
   const handleRate = useCallback(
     (rating: Rating) => {
@@ -131,9 +133,13 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
                 size="sm"
                 onClick={handleTTS}
                 className="bg-white/5 border-white/10 hover:bg-blue-500/20"
+                disabled={!isTTSAvailable}
               >
                 <Volume2 className="w-4 h-4 mr-2" />
                 Listen
+                {!isTTSAvailable && (
+                  <span className="ml-2 text-xs text-red-400">(TTS indisponível)</span>
+                )}
               </Button>
               <Button
                 variant="default"
