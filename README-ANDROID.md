@@ -31,11 +31,8 @@
    ```
 
 5. **Abra o projeto Android:**
-   ```sh
-   npm run android
-   # Ou manualmente:
-   npx cap open android
-   ```
+   - Abra a pasta `/android` manualmente no Android Studio (Windows)
+   - Aguarde o sync do Gradle
 
 6. **No Android Studio:**
    - Aguarde o sync do Gradle.

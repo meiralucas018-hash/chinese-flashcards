@@ -1,64 +1,45 @@
-# 🚀 Welcome to Z.ai Code Scaffold
+# 中文闪卡 - Chinese Flashcards
 
-A modern, production-ready web application scaffold powered by cutting-edge technologies, designed to accelerate your development with [Z.ai](https://chat.z.ai)'s AI-powered coding assistance.
+Uma ferramenta de repetição espaçada para aprender caracteres chineses, com prática de traços, análise de frases e breakdown de palavras.
 
-## ✨ Technology Stack
+## Funcionalidades
+- Prática de flashcards com SRS (spaced repetition)
+- Análise de frases e segmentação de palavras
+- Busca de caracteres e palavras
+- Prática de traços
+- Funciona offline-first (IndexedDB/localStorage)
+- Pronto para exportação estática e Android via Capacitor
 
-This scaffold provides a robust foundation built with:
+## Desenvolvimento local
+```sh
+npm install
+npm run dev
+```
 
-### 🎯 Core Framework
-- **⚡ Next.js 16** - The React framework for production with App Router
-- **📘 TypeScript 5** - Type-safe JavaScript for better developer experience
-- **🎨 Tailwind CSS 4** - Utility-first CSS framework for rapid UI development
+## Exportação estática (para Capacitor/Android)
+```sh
+npm run build:web
+npx cap sync android
+npm run android
+# Abra o projeto Android no Android Studio para gerar o AAB
+```
 
-### 🧩 UI Components & Styling
-- **🧩 shadcn/ui** - High-quality, accessible components built on Radix UI
-- **🎯 Lucide React** - Beautiful & consistent icon library
-- **🌈 Framer Motion** - Production-ready motion library for React
-- **🎨 Next Themes** - Perfect dark mode in 2 lines of code
+## Dicionário CC-CEDICT
+- O arquivo está em `public/data/cedict.txt`
+- Carregado e indexado client-side via `src/lib/cedict.ts`
 
-### 📋 Forms & Validation
-- **🎣 React Hook Form** - Performant forms with easy validation
-- **✅ Zod** - TypeScript-first schema validation
+## Observações
+- O app não possui backend/server: todas as buscas e análises são client-side
+- Compatível com exportação estática Next.js e Capacitor Android
 
-### 🔄 State Management & Data Fetching
-- **🐻 Zustand** - Simple, scalable state management
-- **🔄 TanStack Query** - Powerful data synchronization for React
-- **🌐 Fetch** - Promise-based HTTP request
+## Build Android (Windows/Android Studio)
+1. Gere os arquivos estáticos: `npm run build:web`
+2. Sincronize com Capacitor: `npx cap sync android`
+3. Execute: `npm run android` ou abra manualmente com `npx cap add android`
+4. No Android Studio, gere o arquivo `.aab` para Google Play Internal Testing
 
-### 🗄️ Database & Backend
-- **🗄️ Prisma** - Next-generation TypeScript ORM
-- **🔐 NextAuth.js** - Complete open-source authentication solution
-
-### 🎨 Advanced UI Features
-- **📊 TanStack Table** - Headless UI for building tables and datagrids
-- **🖱️ DND Kit** - Modern drag and drop toolkit for React
-- **📊 Recharts** - Redefined chart library built with React and D3
-- **🖼️ Sharp** - High performance image processing
-
-### 🌍 Internationalization & Utilities
-- **🌍 Next Intl** - Internationalization library for Next.js
-- **📅 Date-fns** - Modern JavaScript date utility library
-- **🪝 ReactUse** - Collection of essential React hooks for modern development
-
-## 🎯 Why This Scaffold?
-
-- **🏎️ Fast Development** - Pre-configured tooling and best practices
-- **🎨 Beautiful UI** - Complete shadcn/ui component library with advanced interactions
-- **🔒 Type Safety** - Full TypeScript configuration with Zod validation
-- **📱 Responsive** - Mobile-first design principles with smooth animations
-- **🗄️ Database Ready** - Prisma ORM configured for rapid backend development
-- **🔐 Auth Included** - NextAuth.js for secure authentication flows
-- **📊 Data Visualization** - Charts, tables, and drag-and-drop functionality
-- **🌍 i18n Ready** - Multi-language support with Next Intl
-- **🚀 Production Ready** - Optimized build and deployment settings
-- **🤖 AI-Friendly** - Structured codebase perfect for AI assistance
-
-## 🚀 Quick Start
-
-```bash
-# Install dependencies
-bun install
+## Licença
+MIT
 
 # Start development server
 bun run dev
