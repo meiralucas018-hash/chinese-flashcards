@@ -19,13 +19,7 @@ import type {
 } from "@/types";
 import { getDueCards, initializeNewCard } from "@/lib/srs";
 import * as flashcardDb from "@/lib/flashcard-db";
-import {
-  buildExampleBreakdown,
-  loadCedict,
-  searchCedict,
-  segmentSentence,
-  toBreakdownSegments,
-} from "@/lib/cedict";
+import { buildExampleBreakdown, loadCedict, searchCedict } from "@/lib/cedict";
 import { useToastMessage } from "@/hooks/use-toast-message";
 import { useFlashcardData } from "@/hooks/use-flashcard-data";
 import DecksView from "@/components/views/DecksView";
@@ -48,6 +42,46 @@ const EMPTY_FORM: NewCardFormState = {
   examplePinyin: "",
   exampleTranslation: "",
 };
+
+const EMPTY_EXAMPLE_BREAKDOWN: CardType["exampleBreakdown"] = {
+  sentence: "",
+  pinyin: "",
+  translation: "",
+  segments: [],
+};
+
+function toSentenceAnalysis(
+  exampleBreakdown: CardType["exampleBreakdown"],
+): SentenceAnalysis {
+  return {
+    sentence: exampleBreakdown.sentence,
+    translation: exampleBreakdown.translation,
+    pinyin: exampleBreakdown.pinyin,
+    segments: exampleBreakdown.segments,
+    characters: exampleBreakdown.segments.flatMap((segment) => segment.chars),
+  };
+}
+
+function buildUsageExamples(
+  exampleBreakdown: CardType["exampleBreakdown"],
+): CardType["usageExamples"] | undefined {
+  if (
+    !exampleBreakdown.sentence.trim() ||
+    exampleBreakdown.segments.length === 0
+  ) {
+    return undefined;
+  }
+
+  return [
+    {
+      label: "Example",
+      sentence: exampleBreakdown.sentence,
+      pinyin: exampleBreakdown.pinyin,
+      translation: exampleBreakdown.translation,
+      breakdown: exampleBreakdown.segments,
+    },
+  ];
+}
 
 export default function ChineseFlashcardApp() {
   const [activeTab, setActiveTab] = useState<TabType>("decks");
@@ -217,6 +251,59 @@ export default function ChineseFlashcardApp() {
     setNewCardForm((prev) => ({ ...prev, ...patch }));
   }, []);
 
+  const resetCardForm = useCallback(() => {
+    setNewCardForm(EMPTY_FORM);
+    setSentenceAnalysis(null);
+  }, []);
+
+  const endStudySession = useCallback(() => {
+    setStudyQueue([]);
+    setCurrentCardIndex(0);
+    setActiveTab("decks");
+  }, []);
+
+  const buildCardExampleData = useCallback(
+    async ({
+      sentence,
+      examplePinyin,
+      exampleTranslation,
+      cachedAnalysis,
+    }: {
+      sentence: string;
+      examplePinyin?: string;
+      exampleTranslation?: string;
+      cachedAnalysis?: SentenceAnalysis | null;
+    }) => {
+      const trimmedSentence = sentence.trim();
+      if (!trimmedSentence) {
+        return {
+          exampleBreakdown: EMPTY_EXAMPLE_BREAKDOWN,
+          usageExamples: undefined,
+        };
+      }
+
+      const exampleBreakdown =
+        cachedAnalysis && cachedAnalysis.sentence === trimmedSentence
+          ? {
+              sentence: trimmedSentence,
+              pinyin: examplePinyin?.trim() || cachedAnalysis.pinyin,
+              translation:
+                exampleTranslation?.trim() || cachedAnalysis.translation,
+              segments: cachedAnalysis.segments,
+            }
+          : buildExampleBreakdown(trimmedSentence, await loadCedict(), {
+              pinyinOverride: examplePinyin,
+              translation: exampleTranslation,
+            });
+
+      return {
+        exampleBreakdown,
+        usageExamples: buildUsageExamples(exampleBreakdown),
+      };
+    },
+    [],
+  );
+
   const handleAutoFetch = useCallback(async () => {
     const inputText = newCardForm.front.trim();
     if (!inputText) {
@@ -267,20 +354,11 @@ export default function ChineseFlashcardApp() {
     setIsAnalyzingSentence(true);
     try {
       const index = await loadCedict();
-      const wordSegments = segmentSentence(sentence, index);
-      const breakdownSegments = toBreakdownSegments(wordSegments);
-      const pinyinFromSegments = wordSegments
-        .map((item) => item.pinyin)
-        .filter(Boolean)
-        .join(" ");
-
-      const analysis: SentenceAnalysis = {
-        sentence,
-        translation: newCardForm.exampleTranslation.trim(),
-        pinyin: newCardForm.examplePinyin.trim() || pinyinFromSegments,
-        segments: breakdownSegments,
-        characters: breakdownSegments.flatMap((segment) => segment.chars),
-      };
+      const exampleBreakdown = buildExampleBreakdown(sentence, index, {
+        pinyinOverride: newCardForm.examplePinyin,
+        translation: newCardForm.exampleTranslation,
+      });
+      const analysis = toSentenceAnalysis(exampleBreakdown);
 
       setSentenceAnalysis(analysis);
       if (!newCardForm.examplePinyin && analysis.pinyin) {
@@ -322,44 +400,12 @@ export default function ChineseFlashcardApp() {
     try {
       const srsInit = initializeNewCard();
       const sentence = newCardForm.example.trim();
-
-      let exampleBreakdown = {
-        sentence: "",
-        pinyin: "",
-        translation: "",
-        segments: [],
-      } as CardType["exampleBreakdown"];
-
-      if (sentence) {
-        if (sentenceAnalysis && sentenceAnalysis.sentence === sentence) {
-          exampleBreakdown = {
-            sentence,
-            pinyin: newCardForm.examplePinyin.trim() || sentenceAnalysis.pinyin,
-            translation:
-              newCardForm.exampleTranslation.trim() ||
-              sentenceAnalysis.translation,
-            segments: sentenceAnalysis.segments,
-          };
-        } else {
-          const index = await loadCedict();
-          exampleBreakdown = buildExampleBreakdown(sentence, index, {
-            pinyinOverride: newCardForm.examplePinyin,
-            translation: newCardForm.exampleTranslation,
-          });
-        }
-      }
-
-      const usageExamples = exampleBreakdown.segments.length
-        ? [
-            {
-              label: "Example",
-              sentence: exampleBreakdown.sentence,
-              pinyin: exampleBreakdown.pinyin,
-              translation: exampleBreakdown.translation,
-              breakdown: exampleBreakdown.segments,
-            },
-          ]
-        : [];
+      const { exampleBreakdown, usageExamples } = await buildCardExampleData({
+        sentence,
+        examplePinyin: newCardForm.examplePinyin,
+        exampleTranslation: newCardForm.exampleTranslation,
+        cachedAnalysis: sentenceAnalysis,
+      });
 
       const newCard: CardType = flashcardDb.ensureCardFields({
         id: generateId(),
@@ -369,7 +415,7 @@ export default function ChineseFlashcardApp() {
         meaning,
         example: sentence,
         exampleBreakdown,
-        usageExamples,
+        ...(usageExamples ? { usageExamples } : {}),
         ...srsInit,
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -382,17 +428,18 @@ export default function ChineseFlashcardApp() {
         (deckStatsMap[currentDeck.id]?.total || 0) + 1,
       );
 
-      setNewCardForm(EMPTY_FORM);
-      setSentenceAnalysis(null);
+      resetCardForm();
       showToast("Card created successfully");
     } catch (error) {
       console.error("Failed to create card:", error);
       showToast("Failed to create card");
     }
   }, [
+    buildCardExampleData,
     currentDeck,
     deckStatsMap,
     newCardForm,
+    resetCardForm,
     sentenceAnalysis,
     setCards,
     showToast,
@@ -426,24 +473,24 @@ export default function ChineseFlashcardApp() {
       if (!card) return;
 
       try {
-        let exampleBreakdown = card.exampleBreakdown;
         const nextExample = (patch.example ?? card.example).trim();
-
-        if (nextExample && nextExample !== card.example) {
-          const index = await loadCedict();
-          exampleBreakdown = buildExampleBreakdown(nextExample, index, {
-            pinyinOverride:
-              patch.exampleBreakdown?.pinyin || card.exampleBreakdown.pinyin,
-            translation:
-              patch.exampleBreakdown?.translation ||
-              card.exampleBreakdown.translation,
-          });
-        }
+        const nextExamplePinyin =
+          patch.exampleBreakdown?.pinyin ?? card.exampleBreakdown.pinyin;
+        const nextExampleTranslation =
+          patch.exampleBreakdown?.translation ??
+          card.exampleBreakdown.translation;
+        const { exampleBreakdown, usageExamples } = await buildCardExampleData({
+          sentence: nextExample,
+          examplePinyin: nextExamplePinyin,
+          exampleTranslation: nextExampleTranslation,
+        });
 
         const updatedCard = flashcardDb.ensureCardFields({
           ...card,
           ...patch,
+          example: nextExample,
           exampleBreakdown,
+          ...(usageExamples ? { usageExamples } : { usageExamples: undefined }),
           updatedAt: Date.now(),
         });
 
@@ -457,7 +504,7 @@ export default function ChineseFlashcardApp() {
         showToast("Failed to update card");
       }
     },
-    [cards, setCards, showToast],
+    [buildCardExampleData, cards, setCards, showToast],
   );
 
   const handleSearch = useCallback(async () => {
@@ -606,11 +653,7 @@ export default function ChineseFlashcardApp() {
             <StudyView
               studyQueue={studyQueue}
               currentCardIndex={currentCardIndex}
-              onEndSession={() => {
-                setStudyQueue([]);
-                setCurrentCardIndex(0);
-                setActiveTab("decks");
-              }}
+              onEndSession={endStudySession}
               onRateCard={handleRateCard}
               onSpeakChinese={speakChinese}
             />
@@ -629,10 +672,7 @@ export default function ChineseFlashcardApp() {
               onAutoFetch={handleAutoFetch}
               onAnalyzeSentence={handleAnalyzeSentence}
               onCreateCard={handleCreateCard}
-              onClearForm={() => {
-                setNewCardForm(EMPTY_FORM);
-                setSentenceAnalysis(null);
-              }}
+              onClearForm={resetCardForm}
               onDeleteCard={handleDeleteCard}
               onEditCard={handleEditCard}
             />

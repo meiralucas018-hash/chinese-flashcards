@@ -410,7 +410,7 @@ export function ensureCardFields(card: Partial<Card>): Card {
           normalizeUsageExample(example as unknown, `Example ${index + 1}`),
         )
         .filter((example): example is UsageExample => !!example)
-    : [];
+    : undefined;
 
   return {
     id: card.id || generateId(),
@@ -425,7 +425,9 @@ export function ensureCardFields(card: Partial<Card>): Card {
       translation: toString(card.exampleBreakdown?.translation),
       segments: normalizedExampleBreakdownSegments,
     },
-    usageExamples: normalizedUsageExamples,
+    ...(normalizedUsageExamples && normalizedUsageExamples.length > 0
+      ? { usageExamples: normalizedUsageExamples }
+      : {}),
     interval: card.interval ?? 0,
     repetition: card.repetition ?? 0,
     easeFactor: card.easeFactor ?? 2.5,

@@ -49,7 +49,7 @@ export interface Card {
   example: string;
   exampleBreakdown: ExampleBreakdown;
   // Multiple usage examples (like the comprehensive breakdown in Example.html)
-  usageExamples: UsageExample[];
+  usageExamples?: UsageExample[];
   // SRS fields
   interval: number;
   repetition: number;
