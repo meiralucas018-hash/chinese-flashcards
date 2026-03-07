@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import {
+  Geist,
+  Geist_Mono,
+  Noto_Sans_SC,
+  Noto_Serif_SC,
+} from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import ServiceWorkerRegister from "@/components/service-worker-register";
@@ -14,10 +19,32 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const notoSansSC = Noto_Sans_SC({
+  variable: "--font-noto-sans-sc",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const notoSerifSC = Noto_Serif_SC({
+  variable: "--font-noto-serif-sc",
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+});
+
 export const metadata: Metadata = {
   title: "中文闪卡 - Chinese Flashcards",
-  description: "A spaced repetition learning tool for Chinese characters with stroke practice and character breakdown.",
-  keywords: ["Chinese", "Flashcards", "Hanzi", "Pinyin", "Spaced Repetition", "Language Learning", "汉字", "拼音"],
+  description:
+    "A spaced repetition learning tool for Chinese characters with stroke practice and character breakdown.",
+  keywords: [
+    "Chinese",
+    "Flashcards",
+    "Hanzi",
+    "Pinyin",
+    "Spaced Repetition",
+    "Language Learning",
+    "汉字",
+    "拼音",
+  ],
   authors: [{ name: "Chinese Flashcards App" }],
   icons: {
     icon: "/logo.svg",
@@ -41,21 +68,22 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
         <meta name="theme-color" content="#ffffff" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Chinese Flashcards" />
-        {/* Load Chinese fonts for proper character display */}
-        <link
-          href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;600;700&display=swap"
-          rel="stylesheet"
+        <meta
+          name="apple-mobile-web-app-status-bar-style"
+          content="black-translucent"
         />
+        <meta name="apple-mobile-web-app-title" content="Chinese Flashcards" />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground font-sans`}
+        className={`${geistSans.variable} ${geistMono.variable} ${notoSansSC.variable} ${notoSerifSC.variable} antialiased bg-background text-foreground font-sans`}
         style={{
-          fontFamily: "'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'SimHei', sans-serif",
+          fontFamily: `${notoSansSC.style.fontFamily}, 'PingFang SC', 'Microsoft YaHei', 'SimHei', sans-serif`,
         }}
       >
         <ServiceWorkerRegister />
