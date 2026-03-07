@@ -1,13 +1,17 @@
-'use client';
+"use client";
 
-import React, { useState, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card as CardType, Rating, UsageExample } from '@/types';
-import { convertPinyinTones, getToneColor } from '@/lib/pinyin';
-import { calculateNextReview, calculateNextReviewTime } from '@/lib/srs';
-import PracticeCanvas from './PracticeCanvas';
-import CharacterBreakdown from './CharacterBreakdown';
-import { RotateCcw, Volume2, ChevronLeft, RotateCw, Undo2 } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card as CardType, Rating, UsageExample } from "@/types";
+import { convertPinyinTones, getToneColor } from "@/lib/pinyin";
+import {
+  calculateNextReview,
+  calculateNextReviewTime,
+  getRatingFromShortcut,
+} from "@/lib/srs";
+import PracticeCanvas from "./PracticeCanvas";
+import CharacterBreakdown from "./CharacterBreakdown";
+import { Volume2, RotateCw, Undo2 } from "lucide-react";
 
 interface FlashcardProps {
   card: CardType;
@@ -15,11 +19,11 @@ interface FlashcardProps {
   onTTS?: (text: string) => void;
 }
 
-function UsageExampleCard({ 
-  example, 
-  index 
-}: { 
-  example: UsageExample; 
+function UsageExampleCard({
+  example,
+  index,
+}: {
+  example: UsageExample;
   index: number;
 }) {
   return (
@@ -48,14 +52,15 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
     setIsFlipped(false);
   }, []);
 
-  const isTTSAvailable = typeof window !== 'undefined' && 'speechSynthesis' in window;
+  const isTTSAvailable =
+    typeof window !== "undefined" && "speechSynthesis" in window;
   const handleTTS = useCallback(() => {
     if (!isTTSAvailable) return;
     if (onTTS && card.front) {
       onTTS(card.front);
     } else {
       const utterance = new window.SpeechSynthesisUtterance(card.front);
-      utterance.lang = 'zh-CN';
+      utterance.lang = "zh-CN";
       utterance.rate = 0.8;
       window.speechSynthesis.speak(utterance);
     }
@@ -72,8 +77,39 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
       onRate(card.id, rating, updates);
       setIsFlipped(false);
     },
-    [card, onRate]
+    [card, onRate],
   );
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === " " || event.code === "Space") {
+        event.preventDefault();
+        if (isFlipped) {
+          handleReturn();
+        } else {
+          handleFlip();
+        }
+        return;
+      }
+
+      if (!isFlipped) return;
+
+      if (event.key.toLowerCase() === "r") {
+        event.preventDefault();
+        handleReturn();
+        return;
+      }
+
+      const rating = getRatingFromShortcut(event.key);
+      if (rating) {
+        event.preventDefault();
+        handleRate(rating);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleFlip, handleRate, handleReturn, isFlipped]);
 
   // Extract tone from pinyin for color
   const getToneClass = () => {
@@ -81,26 +117,26 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
     if (toneMatch) {
       return getToneColor(parseInt(toneMatch[1], 10));
     }
-    return 'text-blue-400';
+    return "text-blue-400";
   };
 
   return (
     <div className="flashcard-container w-full max-w-[760px] mx-auto">
       <div
         className={`card-inner relative w-full transition-transform duration-500 transform-style-3d ${
-          isFlipped ? 'rotate-y-180' : ''
+          isFlipped ? "rotate-y-180" : ""
         }`}
         style={{
-          transformStyle: 'preserve-3d',
-          transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+          transformStyle: "preserve-3d",
+          transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
         }}
       >
         {/* Front of Card - Practice Board (Main Focus) */}
         <div
           className="card-front w-full"
           style={{
-            backfaceVisibility: 'hidden',
-            position: isFlipped ? 'absolute' : 'relative',
+            backfaceVisibility: "hidden",
+            position: isFlipped ? "absolute" : "relative",
             top: 0,
             left: 0,
           }}
@@ -111,7 +147,8 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
               <h2
                 className={`text-3xl md:text-4xl font-extrabold cursor-pointer transition-all hover:scale-105 ${getToneClass()}`}
                 style={{
-                  textShadow: '0 0 18px rgba(96, 165, 250, 0.22), 0 18px 45px rgba(0,0,0,0.55)',
+                  textShadow:
+                    "0 0 18px rgba(96, 165, 250, 0.22), 0 18px 45px rgba(0,0,0,0.55)",
                 }}
                 onClick={handleFlip}
                 title="Click to see answer"
@@ -124,7 +161,13 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
             </div>
 
             {/* Practice Canvas - Main Focus */}
-            <PracticeCanvas character={card.front} width={320} height={320} showTemplate showGrid />
+            <PracticeCanvas
+              character={card.front}
+              width={320}
+              height={320}
+              showTemplate
+              showGrid
+            />
 
             {/* Action buttons */}
             <div className="flex justify-center mt-6 gap-3">
@@ -138,7 +181,9 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
                 <Volume2 className="w-4 h-4 mr-2" />
                 Listen
                 {!isTTSAvailable && (
-                  <span className="ml-2 text-xs text-red-400">(TTS indisponível)</span>
+                  <span className="ml-2 text-xs text-red-400">
+                    (TTS indisponível)
+                  </span>
                 )}
               </Button>
               <Button
@@ -157,7 +202,8 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
 
             {/* Hint text */}
             <p className="text-center text-slate-500 text-xs mt-4">
-              Practice writing the character above, then flip to see the meaning breakdown
+              Practice writing the character above, then flip to see the meaning
+              breakdown
             </p>
           </div>
         </div>
@@ -166,9 +212,9 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
         <div
           className="card-back w-full"
           style={{
-            backfaceVisibility: 'hidden',
-            transform: 'rotateY(180deg)',
-            position: isFlipped ? 'relative' : 'absolute',
+            backfaceVisibility: "hidden",
+            transform: "rotateY(180deg)",
+            position: isFlipped ? "relative" : "absolute",
             top: 0,
             left: 0,
           }}
@@ -179,7 +225,8 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
               <h2
                 className={`text-4xl md:text-5xl font-extrabold cursor-pointer transition-all hover:scale-105 ${getToneClass()}`}
                 style={{
-                  textShadow: '0 0 20px rgba(96, 165, 250, 0.3), 0 20px 40px rgba(0,0,0,0.5)',
+                  textShadow:
+                    "0 0 20px rgba(96, 165, 250, 0.3), 0 20px 40px rgba(0,0,0,0.5)",
                 }}
                 onClick={handleTTS}
               >
@@ -198,10 +245,15 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
             {card.usageExamples && card.usageExamples.length > 0 ? (
               <div className="usage-examples max-h-[400px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
                 {card.usageExamples.map((example, index) => (
-                  <UsageExampleCard key={index} example={example} index={index} />
+                  <UsageExampleCard
+                    key={index}
+                    example={example}
+                    index={index}
+                  />
                 ))}
               </div>
-            ) : card.exampleBreakdown && card.exampleBreakdown.segments.length > 0 ? (
+            ) : card.exampleBreakdown &&
+              card.exampleBreakdown.segments.length > 0 ? (
               // Fallback to single example breakdown
               <div className="mb-6">
                 <div className="flex items-center gap-2 text-purple-400 text-sm font-bold uppercase tracking-wider mb-3">
@@ -212,6 +264,8 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
                   segments={card.exampleBreakdown.segments}
                   pinyin={card.exampleBreakdown.pinyin}
                   translation={card.exampleBreakdown.translation}
+                  onCharClick={(char) => onTTS?.(char)}
+                  onWordClick={(word) => onTTS?.(word)}
                 />
               </div>
             ) : null}
@@ -226,11 +280,14 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
               >
                 <Undo2 className="w-4 h-4 mr-1" />
                 Return
+                <span className="ml-2 text-xs text-slate-400 border border-white/10 bg-white/5 px-1.5 py-0.5 rounded">
+                  R / Space
+                </span>
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleRate('again')}
+                onClick={() => handleRate("again")}
                 className="bg-red-500/15 border-red-500/40 text-red-400 hover:bg-red-500/25"
               >
                 Again
@@ -241,7 +298,7 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleRate('hard')}
+                onClick={() => handleRate("hard")}
                 className="bg-yellow-500/15 border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/25"
               >
                 Hard
@@ -252,7 +309,7 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleRate('good')}
+                onClick={() => handleRate("good")}
                 className="bg-green-500/15 border-green-500/40 text-green-400 hover:bg-green-500/25"
               >
                 Good
@@ -263,7 +320,7 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleRate('easy')}
+                onClick={() => handleRate("easy")}
                 className="bg-blue-500/15 border-blue-500/40 text-blue-400 hover:bg-blue-500/25"
               >
                 Easy

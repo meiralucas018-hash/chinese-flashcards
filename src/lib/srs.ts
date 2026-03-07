@@ -1,7 +1,22 @@
 // SM-2 Spaced Repetition Algorithm Implementation
 // Based on the SuperMemo SM-2 algorithm
 
-import type { Card, Rating, SRSResult } from '@/types';
+import type { Card, Rating, SRSResult } from "@/types";
+
+export const RATING_SHORTCUTS: Record<"1" | "2" | "3" | "4", Rating> = {
+  "1": "again",
+  "2": "hard",
+  "3": "good",
+  "4": "easy",
+};
+
+export function getRatingFromShortcut(key: string): Rating | null {
+  if (key in RATING_SHORTCUTS) {
+    return RATING_SHORTCUTS[key as keyof typeof RATING_SHORTCUTS];
+  }
+
+  return null;
+}
 
 /**
  * Calculate the next review parameters based on user rating
@@ -24,13 +39,13 @@ export function calculateNextReview(card: Card, rating: Rating): SRSResult {
 
   // Calculate new interval
   switch (rating) {
-    case 'again':
+    case "again":
       // Reset - start over from the beginning
       repetition = 0;
       interval = 1; // 1 day
       break;
 
-    case 'hard':
+    case "hard":
       // Slightly increase interval
       if (repetition === 0) {
         interval = 1;
@@ -42,7 +57,7 @@ export function calculateNextReview(card: Card, rating: Rating): SRSResult {
       repetition += 1;
       break;
 
-    case 'good':
+    case "good":
       // Normal interval increase
       if (repetition === 0) {
         interval = 1;
@@ -54,7 +69,7 @@ export function calculateNextReview(card: Card, rating: Rating): SRSResult {
       repetition += 1;
       break;
 
-    case 'easy':
+    case "easy":
       // Aggressive interval increase
       if (repetition === 0) {
         interval = 2;
@@ -117,23 +132,26 @@ export function getNextReviewDescription(nextReview: number): string {
   const now = Date.now();
   const diff = nextReview - now;
 
-  if (diff <= 0) return 'Due now';
+  if (diff <= 0) return "Due now";
 
   const minutes = Math.floor(diff / (1000 * 60));
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-  if (minutes < 1) return 'Less than a minute';
-  if (minutes < 60) return `In ${minutes} minute${minutes > 1 ? 's' : ''}`;
-  if (hours < 24) return `In ${hours} hour${hours > 1 ? 's' : ''}`;
-  if (days === 1) return 'Tomorrow';
+  if (minutes < 1) return "Less than a minute";
+  if (minutes < 60) return `In ${minutes} minute${minutes > 1 ? "s" : ""}`;
+  if (hours < 24) return `In ${hours} hour${hours > 1 ? "s" : ""}`;
+  if (days === 1) return "Tomorrow";
   return `In ${days} days`;
 }
 
 /**
  * Initialize a new card with default SRS values
  */
-export function initializeNewCard(): Pick<Card, 'interval' | 'repetition' | 'easeFactor' | 'nextReview' | 'lastReview'> {
+export function initializeNewCard(): Pick<
+  Card,
+  "interval" | "repetition" | "easeFactor" | "nextReview" | "lastReview"
+> {
   return {
     interval: 0,
     repetition: 0,

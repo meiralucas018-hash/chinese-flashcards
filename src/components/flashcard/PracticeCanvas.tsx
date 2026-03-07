@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React, { useRef, useLayoutEffect, useCallback, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { RotateCcw, Trash2, Pencil } from 'lucide-react';
+import React, { useRef, useLayoutEffect, useCallback, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { RotateCcw, Trash2, Pencil } from "lucide-react";
 
 interface Point {
   x: number;
@@ -57,7 +57,7 @@ function catmullRomSegment(
   p1: Point,
   p2: Point,
   p3: Point,
-  ctx: CanvasRenderingContext2D
+  ctx: CanvasRenderingContext2D,
 ): void {
   const cp1x = p1.x + (p2.x - p0.x) / 3;
   const cp1y = p1.y + (p2.y - p0.y) / 3;
@@ -88,10 +88,19 @@ function drawCatmullRom(points: Point[], ctx: CanvasRenderingContext2D): void {
   ctx.moveTo(allPoints[1].x, allPoints[1].y);
 
   if (allPoints.length <= 3) {
-    ctx.lineTo(allPoints[allPoints.length - 2].x, allPoints[allPoints.length - 2].y);
+    ctx.lineTo(
+      allPoints[allPoints.length - 2].x,
+      allPoints[allPoints.length - 2].y,
+    );
   } else {
     for (let i = 1; i < allPoints.length - 2; i++) {
-      catmullRomSegment(allPoints[i - 1], allPoints[i], allPoints[i + 1], allPoints[i + 2], ctx);
+      catmullRomSegment(
+        allPoints[i - 1],
+        allPoints[i],
+        allPoints[i + 1],
+        allPoints[i + 2],
+        ctx,
+      );
     }
   }
 
@@ -131,7 +140,11 @@ function isNearlyStraight(points: Point[], threshold: number = 0.1): boolean {
 /**
  * Fit a quadratic Bezier curve using least-squares
  */
-function fitQuadraticBezier(points: Point[]): { p0: Point; p1: Point; p2: Point } {
+function fitQuadraticBezier(points: Point[]): {
+  p0: Point;
+  p1: Point;
+  p2: Point;
+} {
   const p0 = points[0];
   const p2 = points[points.length - 1];
 
@@ -203,10 +216,13 @@ export default function PracticeCanvas({
   const rawPointsRef = useRef<Point[]>([]);
   const undoStackRef = useRef<ImageData[]>([]);
   const lastCharRef = useRef<string | null>(null);
+  const activePointerIdRef = useRef<number | null>(null);
 
   // Get coordinates from mouse or touch event
   const getCoords = useCallback(
-    (e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent): Point => {
+    (
+      e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent,
+    ): Point => {
       const canvas = canvasRef.current;
       if (!canvas) return { x: 0, y: 0 };
 
@@ -214,7 +230,12 @@ export default function PracticeCanvas({
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
 
-      const src = 'touches' in e && e.touches && e.touches.length > 0 ? e.touches[0] : ('clientX' in e ? e : null);
+      const src =
+        "touches" in e && e.touches && e.touches.length > 0
+          ? e.touches[0]
+          : "clientX" in e
+            ? e
+            : null;
       if (!src) return { x: 0, y: 0 };
 
       return {
@@ -222,16 +243,16 @@ export default function PracticeCanvas({
         y: (src.clientY - rect.top) * scaleY,
       };
     },
-    []
+    [],
   );
 
   // Apply stroke style
   const applyStyle = useCallback((ctx: CanvasRenderingContext2D) => {
     ctx.lineWidth = 5;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#f1f5f9';
-    ctx.shadowColor = 'rgba(96, 165, 250, 0.4)';
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#f1f5f9";
+    ctx.shadowColor = "rgba(96, 165, 250, 0.4)";
     ctx.shadowBlur = 6;
   }, []);
 
@@ -242,36 +263,39 @@ export default function PracticeCanvas({
 
       ctx.save();
       ctx.font = `${width * 0.7}px "KaiTi", "楷体", "STKaiti", "华文楷体", "Kai", "Noto Serif SC", serif`;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
       ctx.fillText(character, width / 2, height / 2);
       ctx.restore();
     },
-    [character, width, height, showTemplate]
+    [character, width, height, showTemplate],
   );
 
   // Initialize canvas when character changes
-  const initCanvas = useCallback((resetStrokeCount: boolean) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  const initCanvas = useCallback(
+    (resetStrokeCount: boolean) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
 
-    // Clear and draw template
-    ctx.clearRect(0, 0, width, height);
-    drawTemplate(ctx);
+      // Clear and draw template
+      ctx.clearRect(0, 0, width, height);
+      drawTemplate(ctx);
 
-    // Save initial state
-    undoStackRef.current = [ctx.getImageData(0, 0, width, height)];
-    rawPointsRef.current = [];
-    lastCharRef.current = character;
-    
-    if (resetStrokeCount) {
-      setStrokeCount(0);
-    }
-  }, [character, width, height, drawTemplate]);
+      // Save initial state
+      undoStackRef.current = [ctx.getImageData(0, 0, width, height)];
+      rawPointsRef.current = [];
+      lastCharRef.current = character;
+
+      if (resetStrokeCount) {
+        setStrokeCount(0);
+      }
+    },
+    [character, width, height, drawTemplate],
+  );
 
   // Initialize canvas on mount and when character changes
   useLayoutEffect(() => {
@@ -285,13 +309,16 @@ export default function PracticeCanvas({
   }, [character, initCanvas]);
 
   // Draw live preview during stroke
-  const drawLivePreview = useCallback((ctx: CanvasRenderingContext2D, points: Point[]) => {
-    if (points.length < 2) return;
+  const drawLivePreview = useCallback(
+    (ctx: CanvasRenderingContext2D, points: Point[]) => {
+      if (points.length < 2) return;
 
-    const smoothed = chaikinSmooth(points, 3);
-    applyStyle(ctx);
-    drawCatmullRom(smoothed, ctx);
-  }, [applyStyle]);
+      const smoothed = chaikinSmooth(points, 3);
+      applyStyle(ctx);
+      drawCatmullRom(smoothed, ctx);
+    },
+    [applyStyle],
+  );
 
   // Beautify and draw the final stroke
   const beautifyAndDraw = useCallback(
@@ -313,7 +340,7 @@ export default function PracticeCanvas({
       if (totalLen < 2) {
         ctx.beginPath();
         ctx.arc(p0.x, p0.y, 3, 0, Math.PI * 2);
-        ctx.fillStyle = '#f1f5f9';
+        ctx.fillStyle = "#f1f5f9";
         ctx.fill();
         return;
       }
@@ -335,14 +362,14 @@ export default function PracticeCanvas({
         ctx.stroke();
       }
     },
-    [applyStyle]
+    [applyStyle],
   );
 
   // Save snapshot for undo
   const saveSnapshot = useCallback((): ImageData | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return null;
     return ctx.getImageData(0, 0, width, height);
   }, [width, height]);
@@ -351,35 +378,35 @@ export default function PracticeCanvas({
   const restoreSnapshot = useCallback((snapshot: ImageData) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.putImageData(snapshot, 0, 0);
   }, []);
 
   // Start drawing
   const handleStart = useCallback(
-    (e: React.MouseEvent | React.TouchEvent) => {
+    (e: React.MouseEvent | React.TouchEvent | React.PointerEvent) => {
       e.preventDefault();
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
       setIsDrawing(true);
       rawPointsRef.current = [getCoords(e)];
     },
-    [getCoords]
+    [getCoords],
   );
 
   // Continue drawing
   const handleMove = useCallback(
-    (e: React.MouseEvent | React.TouchEvent) => {
+    (e: React.MouseEvent | React.TouchEvent | React.PointerEvent) => {
       if (!isDrawing) return;
       e.preventDefault();
 
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
       const lastPoint = rawPointsRef.current[rawPointsRef.current.length - 1];
@@ -399,7 +426,7 @@ export default function PracticeCanvas({
         drawLivePreview(ctx, rawPointsRef.current);
       }
     },
-    [isDrawing, getCoords, restoreSnapshot, applyStyle, drawLivePreview]
+    [isDrawing, getCoords, restoreSnapshot, applyStyle, drawLivePreview],
   );
 
   // End drawing
@@ -409,7 +436,7 @@ export default function PracticeCanvas({
 
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     // Replace preview with beautified stroke
@@ -441,7 +468,7 @@ export default function PracticeCanvas({
   const handleClear = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     ctx.clearRect(0, 0, width, height);
@@ -462,7 +489,7 @@ export default function PracticeCanvas({
         className="bg-white/5 border-white/10 hover:bg-blue-500/20 hover:border-blue-500/40"
       >
         <Pencil className="w-4 h-4 mr-2" />
-        {isExpanded ? 'Close Drawing Pad' : 'Practice Drawing'}
+        {isExpanded ? "Close Drawing Pad" : "Practice Drawing"}
       </Button>
 
       {isExpanded && (
@@ -477,7 +504,7 @@ export default function PracticeCanvas({
                     linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
                     linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px)
                   `,
-                  backgroundSize: '50% 50%',
+                  backgroundSize: "50% 50%",
                 }}
               >
                 {/* Diagonal lines for 米 character grid */}
@@ -500,19 +527,34 @@ export default function PracticeCanvas({
               height={height}
               className="rounded-lg cursor-crosshair touch-none"
               style={{
-                background: 'rgba(0, 0, 0, 0.25)',
-                boxShadow: 'inset 0 3px 15px rgba(0,0,0,0.6)',
+                background: "rgba(0, 0, 0, 0.25)",
+                boxShadow: "inset 0 3px 15px rgba(0,0,0,0.6)",
               }}
-              onMouseDown={handleStart}
-              onMouseMove={handleMove}
-              onMouseUp={handleEnd}
-              onMouseLeave={handleEnd}
-              onTouchStart={handleStart}
-              onTouchMove={handleMove}
-              onTouchEnd={handleEnd}
-              onTouchCancel={handleEnd}
+              onPointerDown={(event) => {
+                activePointerIdRef.current = event.pointerId;
+                event.currentTarget.setPointerCapture(event.pointerId);
+                handleStart(event);
+              }}
+              onPointerMove={(event) => {
+                if (activePointerIdRef.current !== event.pointerId) return;
+                handleMove(event);
+              }}
+              onPointerUp={(event) => {
+                if (activePointerIdRef.current === event.pointerId) {
+                  activePointerIdRef.current = null;
+                  handleEnd();
+                }
+              }}
+              onPointerCancel={(event) => {
+                if (activePointerIdRef.current === event.pointerId) {
+                  activePointerIdRef.current = null;
+                  handleEnd();
+                }
+              }}
             />
           </div>
+
+          <div className="text-xs text-slate-400">Strokes: {strokeCount}</div>
 
           <div className="flex gap-2">
             <Button

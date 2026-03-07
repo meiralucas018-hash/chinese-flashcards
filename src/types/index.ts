@@ -10,6 +10,10 @@ export interface Segment {
   chars: CardChar[];
   combinedMeaning: string;
   isWord: boolean;
+  text?: string;
+  pinyin?: string;
+  startIndex?: number;
+  endIndex?: number;
 }
 
 export interface ExampleBreakdown {
@@ -17,6 +21,14 @@ export interface ExampleBreakdown {
   pinyin: string;
   translation: string;
   segments: Segment[];
+}
+
+export interface SentenceAnalysis {
+  sentence: string;
+  translation: string;
+  pinyin: string;
+  segments: Segment[];
+  characters: CardChar[];
 }
 
 // Usage example with label (like "1. Correct / Right", "2. Verb: To face")
@@ -63,7 +75,7 @@ export interface SRSResult {
   easeFactor: number;
 }
 
-export type Rating = 'again' | 'hard' | 'good' | 'easy';
+export type Rating = "again" | "hard" | "good" | "easy";
 
 export interface SearchCharResult {
   char: string;
@@ -88,4 +100,4 @@ export interface FlashCardState {
   isLoading: boolean;
 }
 
-export type TabType = 'decks' | 'study' | 'add' | 'search' | 'settings';
+export type TabType = "decks" | "study" | "add" | "search" | "settings";

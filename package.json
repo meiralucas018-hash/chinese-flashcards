@@ -3,7 +3,8 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000 2>&1 | tee dev.log",
+    "dev": "next dev -p 3000",
+    "build": "next build",
     "build:web": "next build",
     "android": "npm run build:web && npx cap sync android",
     "lint": "eslint .",
