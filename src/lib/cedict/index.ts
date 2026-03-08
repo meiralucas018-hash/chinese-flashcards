@@ -8,7 +8,6 @@ import {
 import { loadCedict, parseCedictLine } from "./loader";
 import {
   buildNaturalTranslation,
-  buildTranslationResult,
   parseSentenceStructure,
 } from "./rule-translation";
 import { searchCedict } from "./search";
@@ -51,6 +50,8 @@ function isNaturalEnglishCandidate(value: string): boolean {
   }
 
   if (
+    /[\u3400-\u9fff]/.test(normalized) ||
+    /\//.test(normalized) ||
     /\badverb of degree\b|\bclassifier\b|\bor him\b|\blanguage\b|\bto have\b|\bto be\b/.test(
       normalized,
     )
@@ -58,7 +59,15 @@ function isNaturalEnglishCandidate(value: string): boolean {
     return false;
   }
 
-  return /\b(i|you|he|she|we|they|it)\b/.test(normalized);
+  return (
+    /^(what|where|why|how|who)\s+(am|are|is|was|were|do|does|did|can|could|will|would|should|may|might|must)\b/.test(
+      normalized,
+    ) ||
+    /\b(i|you|he|she|we|they|it)\b/.test(normalized) ||
+    /^(do not|go|come|look|listen|stop|wait|take|give|open|close|study|read|write|speak|ask)\b/.test(
+      normalized,
+    )
+  );
 }
 
 export function buildExampleBreakdown(
@@ -83,17 +92,24 @@ export function buildExampleBreakdown(
   const literalGloss = buildLiteralGloss(wordSegments);
   const exactTranslation = getExactSentenceTranslation(trimmedSentence, index);
   const ruleTranslation = buildNaturalTranslation(wordSegments, literalGloss);
+  const fallbackTranslation = {
+    translation: literalGloss,
+    translationSource: "fallback" as const,
+    confidence: 0.42,
+  };
+  // Only keep the rule path when its generated English cleared validation.
+  // Otherwise, let an exact full-sentence entry beat it before falling back.
   const resolvedTranslation = options?.translation?.trim()
     ? {
         translation: options.translation.trim(),
         translationSource: "exact" as const,
         confidence: 1,
       }
-    : ruleTranslation.translationSource === "fallback" &&
-        exactTranslation &&
-        isNaturalEnglishCandidate(exactTranslation.translation)
-      ? exactTranslation
-      : buildTranslationResult(wordSegments, literalGloss);
+    : ruleTranslation.translationSource === "rule"
+      ? ruleTranslation
+      : exactTranslation && isNaturalEnglishCandidate(exactTranslation.translation)
+        ? exactTranslation
+        : fallbackTranslation;
 
   return {
     sentence: trimmedSentence,

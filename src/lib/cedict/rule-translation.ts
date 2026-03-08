@@ -1465,6 +1465,296 @@ const ORDERED_RULES: RuleMatcher[] = [
   matchFallbackPredicateRule,
 ];
 
+const RULE_TRANSLATION_ACCEPTANCE_SCORE = 58;
+const FUNCTION_WORDS = new Set<string>([
+  "a",
+  "an",
+  "the",
+  "am",
+  "are",
+  "is",
+  "was",
+  "were",
+  "be",
+  "been",
+  "being",
+  "do",
+  "does",
+  "did",
+  "have",
+  "has",
+  "had",
+  "to",
+  "for",
+  "by",
+  "with",
+  "of",
+  "in",
+  "on",
+  "at",
+  "from",
+  "as",
+  "and",
+  "or",
+  "but",
+  "if",
+  "then",
+  "than",
+  "that",
+  "this",
+  "these",
+  "those",
+  "my",
+  "your",
+  "his",
+  "her",
+  "our",
+  "their",
+  "its",
+  "not",
+]);
+const SUBJECT_WORDS = new Set<string>([
+  "i",
+  "you",
+  "he",
+  "she",
+  "we",
+  "they",
+  "it",
+  "who",
+  "what",
+  "where",
+  "why",
+  "how",
+]);
+const AUXILIARY_WORDS = new Set<string>([
+  "am",
+  "are",
+  "is",
+  "was",
+  "were",
+  "be",
+  "been",
+  "being",
+  "do",
+  "does",
+  "did",
+  "have",
+  "has",
+  "had",
+  "can",
+  "could",
+  "will",
+  "would",
+  "should",
+  "may",
+  "might",
+  "must",
+]);
+const IMPERATIVE_STARTERS = new Set<string>([
+  "ask",
+  "be",
+  "bring",
+  "call",
+  "close",
+  "come",
+  "do",
+  "finish",
+  "follow",
+  "get",
+  "give",
+  "go",
+  "have",
+  "help",
+  "keep",
+  "learn",
+  "listen",
+  "look",
+  "make",
+  "open",
+  "put",
+  "read",
+  "return",
+  "say",
+  "speak",
+  "stand",
+  "start",
+  "stay",
+  "stop",
+  "study",
+  "take",
+  "tell",
+  "think",
+  "turn",
+  "wait",
+  "walk",
+  "watch",
+  "work",
+  "write",
+]);
+
+function tokenizeEnglishWords(text: string): string[] {
+  return text.toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g) || [];
+}
+
+function normalizeEnglishForComparison(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[/.!?;,:'"()\[\]-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function usefulWordCount(words: string[]): number {
+  return words.filter((word) => !FUNCTION_WORDS.has(word)).length;
+}
+
+function overlapRatio(leftWords: string[], rightWords: string[]): number {
+  const leftSet = new Set(leftWords);
+  const rightSet = new Set(rightWords);
+  const sharedCount = [...leftSet].filter((word) => rightSet.has(word)).length;
+  return sharedCount / Math.max(leftSet.size, rightSet.size, 1);
+}
+
+function isLikelyImperative(words: string[]): boolean {
+  if (words.length === 0) {
+    return false;
+  }
+
+  const [firstWord, secondWord] = words;
+  if (firstWord === "do" && secondWord === "not") {
+    return true;
+  }
+
+  return !SUBJECT_WORDS.has(firstWord) && IMPERATIVE_STARTERS.has(firstWord);
+}
+
+function hasSubjectVerbShape(words: string[]): boolean {
+  if (words.length < 2) {
+    return false;
+  }
+
+  if (
+    ["what", "where", "why", "how", "who"].includes(words[0]) &&
+    AUXILIARY_WORDS.has(words[1])
+  ) {
+    return true;
+  }
+
+  return (
+    SUBJECT_WORDS.has(words[0]) &&
+    words.slice(1, 4).some((word) => AUXILIARY_WORDS.has(word))
+  );
+}
+
+function hasBrokenPunctuation(text: string): boolean {
+  return (
+    /\s{2,}/.test(text) ||
+    /\s+[,.!?;:]/.test(text) ||
+    /[,.!?;:]{2,}/.test(text) ||
+    /[,;:](?=[A-Za-z])/g.test(text)
+  );
+}
+
+function deriveRuleConfidence(score: number): number {
+  const clampedScore = Math.max(RULE_TRANSLATION_ACCEPTANCE_SCORE, Math.min(95, score));
+  return Number(
+    (
+      0.55 +
+      ((clampedScore - RULE_TRANSLATION_ACCEPTANCE_SCORE) /
+        (95 - RULE_TRANSLATION_ACCEPTANCE_SCORE)) *
+        0.35
+    ).toFixed(2),
+  );
+}
+
+export function scoreRuleTranslation(
+  translation: string,
+  literalGloss: string,
+): number {
+  const trimmedTranslation = translation.trim();
+  if (!trimmedTranslation) {
+    return 0;
+  }
+
+  const translationWords = tokenizeEnglishWords(trimmedTranslation);
+  const glossWords = tokenizeEnglishWords(literalGloss);
+  const normalizedTranslation = normalizeEnglishForComparison(trimmedTranslation);
+  const normalizedGloss = normalizeEnglishForComparison(literalGloss);
+  const imperative = isLikelyImperative(translationWords);
+  const usefulWords = usefulWordCount(translationWords);
+
+  let score = 50;
+
+  if (/[\u3400-\u9fff]/.test(trimmedTranslation)) {
+    score -= 35;
+  }
+  if (/\//.test(trimmedTranslation)) {
+    score -= 16;
+  }
+  if (normalizedTranslation === normalizedGloss && normalizedTranslation) {
+    score -= 32;
+  } else if (
+    normalizedGloss &&
+    overlapRatio(translationWords, glossWords) >= 0.85 &&
+    Math.abs(translationWords.length - glossWords.length) <= 1
+  ) {
+    score -= 18;
+  }
+  if (/\b(is|are|am|do|does|can|to)\s+\1\b/i.test(trimmedTranslation)) {
+    score -= 20;
+  }
+  if (/^(what is you|where is you|why you|what you)\b/i.test(normalizedTranslation)) {
+    score -= 18;
+  }
+  if (/\b(to|for|by|with|of)\s*[.?!]?$/i.test(trimmedTranslation)) {
+    score -= 14;
+  }
+  if (hasBrokenPunctuation(trimmedTranslation)) {
+    score -= 12;
+  }
+  if (
+    /\bclassifier\b|\bvariant of\b|\badverb of degree\b|\bto have\b|\bto be\b/.test(
+      normalizedTranslation,
+    )
+  ) {
+    score -= 18;
+  }
+  if (translationWords.length <= 1) {
+    score -= imperative ? 4 : 24;
+  } else if (usefulWords < 2 && !imperative) {
+    score -= 16;
+  }
+
+  // Reward outputs that look like real English clauses or clean imperatives.
+  if (hasSubjectVerbShape(translationWords)) {
+    score += 16;
+  } else if (imperative) {
+    score += 12;
+  }
+  if (!/[\u3400-\u9fff]/.test(trimmedTranslation) && !/\//.test(trimmedTranslation)) {
+    score += 8;
+  }
+  if (!hasBrokenPunctuation(trimmedTranslation)) {
+    score += 6;
+  }
+  if (usefulWords >= 2 || imperative) {
+    score += 6;
+  }
+
+  return Math.max(0, Math.min(100, score));
+}
+
+export function isAcceptableRuleTranslation(
+  translation: string,
+  literalGloss: string,
+): boolean {
+  return (
+    scoreRuleTranslation(translation, literalGloss) >=
+    RULE_TRANSLATION_ACCEPTANCE_SCORE
+  );
+}
+
 export function buildRuleBasedTranslation(
   wordSegments: WordSegment[],
 ): string | null {
@@ -1507,14 +1797,23 @@ export function buildNaturalTranslation(
   literalGloss: string,
 ): Omit<TranslationResult, "literalGloss"> {
   const ruleBasedTranslation = buildRuleBasedTranslation(wordSegments);
-  if (ruleBasedTranslation) {
+  const ruleScore = ruleBasedTranslation
+    ? scoreRuleTranslation(ruleBasedTranslation, literalGloss)
+    : 0;
+
+  if (
+    ruleBasedTranslation &&
+    isAcceptableRuleTranslation(ruleBasedTranslation, literalGloss)
+  ) {
+
     return {
       translation: ruleBasedTranslation,
       translationSource: "rule",
-      confidence: 0.82,
+      confidence: deriveRuleConfidence(ruleScore),
     };
   }
 
+  // Weak rule output is safer to discard than to surface as a confident sentence.
   return {
     translation: literalGloss,
     translationSource: "fallback",
