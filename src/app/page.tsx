@@ -26,7 +26,7 @@ import DecksView from "@/components/views/DecksView";
 import StudyView from "@/components/views/StudyView";
 import AddCardView, {
   type NewCardFormState,
-} from "@/components/views/AddCardView";
+} from "../components/views/AddCardView";
 import SearchView from "@/components/views/SearchView";
 import SettingsView from "@/components/views/SettingsView";
 

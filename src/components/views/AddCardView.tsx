@@ -273,6 +273,14 @@ export default function AddCardView({
   const analyzedPinyin = analysisPreview?.pinyin || formState.examplePinyin;
   const analyzedTranslation =
     analysisPreview?.translation || formState.exampleTranslation;
+  const hasSentenceDraft = formState.example.trim().length > 0;
+  const savedSentencePinyinIsGenerated =
+    Boolean(analysisPreview) &&
+    formState.examplePinyin.trim() === (analysisPreview?.pinyin || "").trim();
+  const savedSentenceMeaningIsGenerated =
+    Boolean(analysisPreview) &&
+    formState.exampleTranslation.trim() ===
+      (analysisPreview?.translation || "").trim();
 
   if (!currentDeck) {
     return (
@@ -303,29 +311,36 @@ export default function AddCardView({
               </CardTitle>
             </div>
 
-            <div className="inline-flex w-fit rounded-2xl border border-white/10 bg-slate-950/80 p-1.5">
-              <button
-                type="button"
-                onClick={() => setAuthoringMode("word")}
-                className={`rounded-xl px-4 py-2 text-sm transition-colors ${
-                  authoringMode === "word"
-                    ? "bg-blue-500 text-slate-950"
-                    : "text-slate-300 hover:bg-white/[0.06]"
-                }`}
-              >
-                Word
-              </button>
-              <button
-                type="button"
-                onClick={() => setAuthoringMode("sentence")}
-                className={`rounded-xl px-4 py-2 text-sm transition-colors ${
-                  authoringMode === "sentence"
-                    ? "bg-blue-500 text-slate-950"
-                    : "text-slate-300 hover:bg-white/[0.06]"
-                }`}
-              >
-                Sentence
-              </button>
+            <div className="space-y-2">
+              <div className="grid w-full max-w-sm grid-cols-2 rounded-2xl border border-white/10 bg-slate-950/80 p-1.5 sm:inline-grid">
+                <button
+                  type="button"
+                  onClick={() => setAuthoringMode("word")}
+                  className={`rounded-xl px-4 py-2 text-sm transition-colors ${
+                    authoringMode === "word"
+                      ? "bg-blue-500 text-slate-950 shadow-[0_8px_24px_rgba(96,165,250,0.22)]"
+                      : "text-slate-300 hover:bg-white/[0.06]"
+                  }`}
+                >
+                  Word
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuthoringMode("sentence")}
+                  className={`rounded-xl px-4 py-2 text-sm transition-colors ${
+                    authoringMode === "sentence"
+                      ? "bg-blue-500 text-slate-950 shadow-[0_8px_24px_rgba(96,165,250,0.22)]"
+                      : "text-slate-300 hover:bg-white/[0.06]"
+                  }`}
+                >
+                  Sentence
+                </button>
+              </div>
+              <CardDescription className="text-sm text-slate-400">
+                {authoringMode === "word"
+                  ? "Use local dictionary lookup to prefill the core study fields."
+                  : "Generate a local sentence preview, then adjust what will be saved if needed."}
+              </CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -354,7 +369,7 @@ export default function AddCardView({
                     htmlFor="pinyinInput"
                     className="text-sm text-slate-200"
                   >
-                    Pinying
+                    Pinyin
                   </Label>
                   <Input
                     id="pinyinInput"
@@ -397,14 +412,14 @@ export default function AddCardView({
                   size="sm"
                   onClick={() => void onAutoFetch()}
                   disabled={isAutoFetching || !formState.front.trim()}
-                  className="border-blue-400/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/18 focus-visible:border-blue-300/60"
+                  className="min-w-[164px] border-blue-400/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/18 focus-visible:border-blue-300/60 disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
                 >
                   {isAutoFetching ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <Sparkles className="mr-2 h-4 w-4" />
                   )}
-                  Translate
+                  {isAutoFetching ? "Looking up..." : "Fill from dictionary"}
                 </Button>
               </div>
             </section>
@@ -412,109 +427,94 @@ export default function AddCardView({
 
           {authoringMode === "sentence" && (
             <section className="space-y-5 rounded-2xl border border-white/8 bg-slate-950/35 p-4 md:p-5">
-              <div className="grid gap-4 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-                <div className="space-y-2.5">
+              <div className="space-y-2.5">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <Label
                     htmlFor="exampleInput"
                     className="text-sm text-slate-200"
                   >
                     Chinese Sentence
                   </Label>
-                  <Textarea
-                    id="exampleInput"
-                    value={formState.example}
-                    onChange={(event) =>
-                      onFormChange({ example: event.target.value })
-                    }
-                    placeholder="你好吗？"
-                    className="h-13 resize-y border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
-                    rows={1}
-                  />
+                  <span className="text-xs text-slate-500">
+                    The preview below is generated locally before save.
+                  </span>
                 </div>
-
-                <div className="space-y-2.5">
-                  <Label
-                    htmlFor="examplePinyin"
-                    className="text-sm text-slate-200"
-                  >
-                    Pinyin
-                  </Label>
-                  <Input
-                    id="examplePinyin"
-                    value={formState.examplePinyin}
-                    onChange={(event) =>
-                      onFormChange({ examplePinyin: event.target.value })
-                    }
-                    placeholder="ni3 hao3 ma5"
-                    className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
-                  />
-                  {formState.examplePinyin && (
-                    <div className="text-sm text-blue-200">
-                      {convertPinyinTones(formState.examplePinyin)}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2.5">
-                <Label
-                  htmlFor="exampleTranslation"
-                  className="text-sm text-slate-200"
-                >
-                  Meaning
-                </Label>
-                <Input
-                  id="exampleTranslation"
-                  value={formState.exampleTranslation}
+                <Textarea
+                  id="exampleInput"
+                  value={formState.example}
                   onChange={(event) =>
-                    onFormChange({ exampleTranslation: event.target.value })
+                    onFormChange({ example: event.target.value })
                   }
-                  placeholder="How are you?"
-                  className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
+                  placeholder="你好吗？"
+                  className="min-h-13 resize-y border-slate-600/80 bg-slate-900/80 text-lg text-slate-100 focus-visible:border-blue-400/60 md:text-xl"
+                  rows={1}
                 />
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex flex-col gap-3 rounded-2xl border border-white/8 bg-white/[0.025] p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-slate-200">
+                    Analyze sentence
+                  </p>
+                  <p className="text-xs leading-5 text-slate-500">
+                    Review segmentation, pinyin, and generated meaning before
+                    saving.
+                  </p>
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => void onAnalyzeSentence()}
                   disabled={isAnalyzingSentence || !formState.example.trim()}
-                  className="border-blue-400/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/18 focus-visible:border-blue-300/60"
+                  className="min-w-[164px] border-blue-400/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/18 focus-visible:border-blue-300/60 disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
                 >
                   {isAnalyzingSentence ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <Sparkles className="mr-2 h-4 w-4" />
                   )}
-                  Translate
+                  {isAnalyzingSentence ? "Analyzing..." : "Analyze sentence"}
                 </Button>
               </div>
 
               {analysisPreview && (
-                <div className="space-y-4 rounded-2xl border border-white/10 bg-slate-950/75 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.25)] md:p-5">
-                  <div className="space-y-3">
-                    <p className="font-chinese-ui text-3xl font-semibold tracking-tight text-white md:text-4xl">
-                      {analysisPreview.sentence}
-                    </p>
-                    <p className="text-sm leading-6 text-blue-100/75 md:text-base">
-                      {convertPinyinTones(analyzedPinyin)}
-                    </p>
+                <div className="space-y-5 rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] p-5 shadow-[0_20px_48px_rgba(0,0,0,0.24)] md:p-6">
+                  <div className="flex flex-col gap-3 border-b border-white/8 pb-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-3">
+                      <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-2.5 py-1 text-[11px] uppercase tracking-[0.22em] text-blue-100/80">
+                        Generated preview
+                      </div>
+                      <p className="font-chinese-ui text-3xl font-semibold tracking-tight text-white md:text-4xl">
+                        {analysisPreview.sentence}
+                      </p>
+                      <p className="text-sm leading-6 text-blue-100/75 md:text-base">
+                        {convertPinyinTones(analyzedPinyin)}
+                      </p>
+                    </div>
+                    <div className="max-w-xs text-xs leading-5 text-slate-500 sm:text-right">
+                      Generated from the local sentence-analysis engine. Review
+                      it first, then edit the saved fields below only if you
+                      want an override.
+                    </div>
                   </div>
 
-                  <div className="rounded-2xl border border-blue-400/15 bg-blue-500/8 p-4">
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-500">
+                      Meaning preview
+                    </p>
                     <p className="text-base leading-7 text-slate-50 md:text-lg">
                       {analyzedTranslation}
                     </p>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-3 border-t border-white/8 pt-4">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-sm font-medium text-slate-200">
                         Interactive sentence map
                       </p>
                       <p className="text-xs text-slate-500">
-                        Tap a character or word to inspect the local breakdown.
+                        Select a word group or character to inspect the
+                        breakdown.
                       </p>
                     </div>
                     <CharacterBreakdown
@@ -529,14 +529,14 @@ export default function AddCardView({
                     />
                   </div>
 
-                  <details className="rounded-2xl border border-white/8 bg-white/[0.03]">
+                  <details className="rounded-2xl border border-white/8 bg-white/[0.03] open:bg-white/[0.04]">
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-slate-200 [&::-webkit-details-marker]:hidden">
                       <span className="inline-flex items-center gap-2">
                         <CircleHelp className="h-4 w-4 text-slate-400" />
                         Why this translation?
                       </span>
                       <span className="text-xs text-slate-500">
-                        Literal gloss and notes
+                        Supporting notes
                       </span>
                     </summary>
                     <div className="space-y-3 border-t border-white/8 px-4 py-4 text-sm leading-6 text-slate-300">
@@ -563,11 +563,99 @@ export default function AddCardView({
                 </div>
               )}
 
-              {!analysisPreview && formState.example.trim() && (
+              {!analysisPreview && hasSentenceDraft && (
                 <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/35 p-4 text-sm leading-6 text-slate-400">
-                  Analyze to preview the sentence and segment map.
+                  Run sentence analysis to preview the generated pinyin,
+                  meaning, and segmentation before saving.
                 </div>
               )}
+
+              <div className="space-y-4 rounded-2xl border border-white/8 bg-slate-950/30 p-4 md:p-5">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-200">
+                      Save with card
+                    </p>
+                    <p className="text-xs leading-5 text-slate-500">
+                      Editable before saving. Leave generated values as-is, or
+                      replace them with your own wording.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label
+                        htmlFor="examplePinyin"
+                        className="text-sm text-slate-200"
+                      >
+                        Saved pinyin
+                      </Label>
+                      {analysisPreview && (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] ${
+                            savedSentencePinyinIsGenerated
+                              ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
+                              : "border border-white/10 bg-white/[0.05] text-slate-300"
+                          }`}
+                        >
+                          {savedSentencePinyinIsGenerated
+                            ? "Generated from analysis"
+                            : "Custom value"}
+                        </span>
+                      )}
+                    </div>
+                    <Input
+                      id="examplePinyin"
+                      value={formState.examplePinyin}
+                      onChange={(event) =>
+                        onFormChange({ examplePinyin: event.target.value })
+                      }
+                      placeholder="ni3 hao3 ma5"
+                      className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
+                    />
+                    {formState.examplePinyin && (
+                      <div className="text-sm text-blue-200">
+                        {convertPinyinTones(formState.examplePinyin)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label
+                        htmlFor="exampleTranslation"
+                        className="text-sm text-slate-200"
+                      >
+                        Saved meaning
+                      </Label>
+                      {analysisPreview && (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] ${
+                            savedSentenceMeaningIsGenerated
+                              ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
+                              : "border border-white/10 bg-white/[0.05] text-slate-300"
+                          }`}
+                        >
+                          {savedSentenceMeaningIsGenerated
+                            ? "Generated from analysis"
+                            : "Custom value"}
+                        </span>
+                      )}
+                    </div>
+                    <Input
+                      id="exampleTranslation"
+                      value={formState.exampleTranslation}
+                      onChange={(event) =>
+                        onFormChange({ exampleTranslation: event.target.value })
+                      }
+                      placeholder="How are you?"
+                      className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
+                    />
+                  </div>
+                </div>
+              </div>
             </section>
           )}
 

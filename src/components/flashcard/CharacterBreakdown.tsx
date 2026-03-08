@@ -48,18 +48,18 @@ export default function CharacterBreakdown({
   };
 
   return (
-    <div className={isCompact ? "space-y-3" : "space-y-2"}>
+    <div className={isCompact ? "space-y-4" : "space-y-2"}>
       <div
         className={`sentence-wrap ${
           isCompact
-            ? "rounded-xl border border-white/8 bg-slate-950/70 p-3 md:p-4 hover:border-blue-400/20 hover:bg-slate-950/80 hover:translate-y-0"
+            ? "rounded-2xl border border-white/8 bg-white/[0.035] p-4 shadow-inner shadow-black/20 hover:border-blue-400/25 hover:bg-white/[0.045] hover:translate-y-0 md:p-5"
             : "bg-white/5 border border-white/10 rounded-lg p-4 transition-all hover:border-blue-500/30 hover:bg-white/10"
         }`}
       >
         <div
           className={`sentence-box break-keep select-none leading-relaxed ${
             isCompact
-              ? "text-lg text-slate-50 md:text-xl"
+              ? "text-xl text-slate-50 md:text-[1.65rem]"
               : "text-xl text-slate-100 md:text-2xl"
           }`}
         >
@@ -75,8 +75,10 @@ export default function CharacterBreakdown({
               return (
                 <span
                   key={`${word}-${segIndex}`}
-                  className={`relative mr-0.5 inline-flex items-end rounded px-0.5 ${
-                    segment.isWord ? "pb-1" : "hover:bg-blue-500/10"
+                  className={`relative mr-1 inline-flex items-end rounded-md transition-colors ${
+                    segment.isWord
+                      ? "bg-purple-500/[0.07] px-1.5 pb-1 pt-0.5 ring-1 ring-inset ring-purple-400/10"
+                      : "px-0.5 hover:bg-blue-500/10"
                   }`}
                 >
                   <span className="inline-flex gap-0.5 rounded text-left">
@@ -86,7 +88,7 @@ export default function CharacterBreakdown({
                           <span
                             className={`cursor-pointer rounded px-0.5 transition-colors ${
                               isCompact
-                                ? "hover:bg-blue-500/15 hover:text-blue-200"
+                                ? "hover:bg-blue-500/15 hover:text-blue-100"
                                 : "hover:bg-blue-500/20 hover:text-blue-300"
                             }`}
                             onClick={(event) =>
@@ -98,7 +100,7 @@ export default function CharacterBreakdown({
                         </TooltipTrigger>
                         <TooltipContent
                           sideOffset={6}
-                          className="max-w-[260px] bg-slate-900 border border-blue-500/50 text-slate-100"
+                          className="max-w-[260px] rounded-xl border border-blue-500/45 bg-slate-900 px-3 py-2 text-slate-100 shadow-[0_12px_30px_rgba(0,0,0,0.32)]"
                         >
                           <div className="text-xs">
                             <div className="font-semibold text-blue-300">
@@ -121,13 +123,13 @@ export default function CharacterBreakdown({
                         <button
                           type="button"
                           aria-label={`Show details for ${word}`}
-                          className="absolute inset-x-0 bottom-0 h-1.5 rounded-sm border-b-2 border-dashed border-purple-500/60 transition-colors hover:border-purple-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/70"
+                          className="absolute inset-x-1 bottom-0 h-2 rounded-sm border-b-2 border-dashed border-purple-400/70 transition-colors hover:border-purple-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/70"
                           onClick={(event) => handleWordClick(event, word)}
                         />
                       </TooltipTrigger>
                       <TooltipContent
                         sideOffset={8}
-                        className="max-w-[320px] bg-slate-900 border border-purple-400/50 text-slate-100"
+                        className="max-w-[320px] rounded-xl border border-purple-400/45 bg-slate-900 px-3 py-2 text-slate-100 shadow-[0_12px_30px_rgba(0,0,0,0.32)]"
                       >
                         <div className="text-xs">
                           <div className="font-semibold text-purple-300">
