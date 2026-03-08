@@ -31,10 +31,15 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
     sentence: "他被老师批评了。",
     expectedTranslationIncludes: ["by", "teacher"],
   },
-  { sentence: "我看得懂。", expectedTranslationIncludes: ["can understand"] },
+  {
+    sentence: "我看得懂。",
+    expectedTranslationIncludes: ["read", "understand"],
+    expectedTranslationExcludes: ["look understand", "look can", "get"],
+  },
   {
     sentence: "我看不懂。",
-    expectedTranslationIncludes: ["cannot understand"],
+    expectedTranslationIncludes: ["cannot", "understand", "reading"],
+    expectedTranslationExcludes: ["look understand", "look can", "get"],
   },
   { sentence: "今天我很忙。", expectedTranslationIncludes: ["today", "busy"] },
   { sentence: "明天见。", expectedTranslationIncludes: ["tomorrow"] },
@@ -51,8 +56,71 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
   { sentence: "我在吃饭。", expectedTranslationIncludes: ["i am", "eating"] },
   { sentence: "我们比他们忙。", expectedTranslationIncludes: ["more", "than"] },
   { sentence: "不要说话。", expectedTranslationIncludes: ["do not", "speak"] },
-  { sentence: "我找不到。", expectedTranslationIncludes: ["cannot find"] },
-  { sentence: "我听得见。", expectedTranslationIncludes: ["can hear"] },
+  {
+    sentence: "我找不到。",
+    expectedTranslationIncludes: ["cannot find"],
+    expectedTranslationExcludes: ["look for", "arrive at"],
+  },
+  {
+    sentence: "我听得见。",
+    expectedTranslationIncludes: ["can hear"],
+    expectedTranslationExcludes: ["listen can", "get"],
+  },
+  {
+    sentence: "我听不见。",
+    expectedTranslationIncludes: ["cannot hear"],
+    expectedTranslationExcludes: ["listen can", "get"],
+  },
+  {
+    sentence: "我听得懂。",
+    expectedTranslationIncludes: ["can", "understand", "hearing"],
+    expectedTranslationExcludes: ["listen can", "get"],
+  },
+  {
+    sentence: "我听不懂。",
+    expectedTranslationIncludes: ["cannot", "understand", "hearing"],
+    expectedTranslationExcludes: ["listen can", "get"],
+  },
+  {
+    sentence: "我做得到。",
+    expectedTranslationIncludes: ["can do it"],
+    expectedTranslationExcludes: ["arrive at", "reach", "get"],
+  },
+  {
+    sentence: "我做不到。",
+    expectedTranslationIncludes: ["cannot do it"],
+    expectedTranslationExcludes: ["arrive at", "reach", "get"],
+  },
+  {
+    sentence: "他找得到。",
+    expectedTranslationIncludes: ["can find it"],
+    expectedTranslationExcludes: ["look for", "arrive at"],
+  },
+  {
+    sentence: "他找不到。",
+    expectedTranslationIncludes: ["cannot find it"],
+    expectedTranslationExcludes: ["look for", "arrive at"],
+  },
+  {
+    sentence: "我来得及。",
+    expectedTranslationIncludes: ["can make it in time"],
+    expectedTranslationExcludes: ["come in time", "arrive at"],
+  },
+  {
+    sentence: "我来不及了。",
+    expectedTranslationIncludes: ["too late"],
+    expectedTranslationExcludes: ["come in time", "arrive at"],
+  },
+  {
+    sentence: "现在还来得及。",
+    expectedTranslationIncludes: ["still time"],
+    expectedTranslationExcludes: ["come in time", "arrive at"],
+  },
+  {
+    sentence: "现在来不及了。",
+    expectedTranslationIncludes: ["too late"],
+    expectedTranslationExcludes: ["come in time", "arrive at"],
+  },
   {
     sentence: "他给我写信。",
     expectedSource: "rule",

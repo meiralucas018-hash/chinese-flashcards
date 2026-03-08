@@ -107,6 +107,7 @@ export const TIME_TRANSLATIONS: Record<string, string> = {
 export const ADVERB_TRANSLATIONS: Record<string, string> = {
   也: "also",
   都: "all",
+  还: "still",
   常常: "often",
   经常: "often",
   总是: "always",
@@ -206,8 +207,10 @@ export const VERB_TRANSLATIONS: Record<string, string> = {
   学: "study",
   学习: "study",
   说: "speak",
+  听: "listen",
   讲: "speak",
   做: "do",
+  办: "manage",
   买: "buy",
   知道: "know",
   认识: "know",
@@ -230,6 +233,7 @@ export const VERB_TRANSLATIONS: Record<string, string> = {
   给: "give",
   穿: "wear",
   拿: "hold",
+  记: "remember",
   写: "write",
   放: "put",
   开: "open",
@@ -273,7 +277,11 @@ export const RESULTATIVE_VERB_TRANSLATIONS: Record<string, string> = {
   看到: "see",
   找到: "find",
   学会: "learn",
+  记住: "remember",
+  听见: "hear",
   听懂: "understand",
+  听到: "hear",
+  看懂: "understand",
   做完: "finish",
   写完: "finish writing",
   买到: "buy",
@@ -281,21 +289,239 @@ export const RESULTATIVE_VERB_TRANSLATIONS: Record<string, string> = {
   说完: "finish speaking",
 };
 
+export type ComplementMeaningCategory =
+  | "ability"
+  | "resultative"
+  | "perception"
+  | "comprehension"
+  | "feasibility";
+
+export type ComplementMeaning = {
+  category: ComplementMeaningCategory;
+  baseVerb: string;
+  complement: string;
+  positive: string;
+  negative: string;
+  object?: string;
+  positiveQuestion?: string;
+  negativeQuestion?: string;
+};
+
+export const COMPLEMENT_MEANINGS: Record<string, ComplementMeaning> = {
+  看得懂: {
+    category: "comprehension",
+    baseVerb: "看",
+    complement: "懂",
+    positive: "can read and understand it",
+    negative: "cannot understand it when reading it",
+    object: "it",
+    positiveQuestion: "read and understand it",
+    negativeQuestion: "understand it when reading it",
+  },
+  看不懂: {
+    category: "comprehension",
+    baseVerb: "看",
+    complement: "懂",
+    positive: "can read and understand it",
+    negative: "cannot understand it when reading it",
+    object: "it",
+    positiveQuestion: "read and understand it",
+    negativeQuestion: "understand it when reading it",
+  },
+  听得见: {
+    category: "perception",
+    baseVerb: "听",
+    complement: "见",
+    positive: "can hear it",
+    negative: "cannot hear it",
+    object: "it",
+    positiveQuestion: "hear it",
+    negativeQuestion: "hear it",
+  },
+  听不见: {
+    category: "perception",
+    baseVerb: "听",
+    complement: "见",
+    positive: "can hear it",
+    negative: "cannot hear it",
+    object: "it",
+    positiveQuestion: "hear it",
+    negativeQuestion: "hear it",
+  },
+  听得懂: {
+    category: "comprehension",
+    baseVerb: "听",
+    complement: "懂",
+    positive: "can understand it when hearing it",
+    negative: "cannot understand it when hearing it",
+    object: "it",
+    positiveQuestion: "understand it when hearing it",
+    negativeQuestion: "understand it when hearing it",
+  },
+  听不懂: {
+    category: "comprehension",
+    baseVerb: "听",
+    complement: "懂",
+    positive: "can understand it when hearing it",
+    negative: "cannot understand it when hearing it",
+    object: "it",
+    positiveQuestion: "understand it when hearing it",
+    negativeQuestion: "understand it when hearing it",
+  },
+  找得到: {
+    category: "ability",
+    baseVerb: "找",
+    complement: "到",
+    positive: "can find it",
+    negative: "cannot find it",
+    object: "it",
+    positiveQuestion: "find it",
+    negativeQuestion: "find it",
+  },
+  找不到: {
+    category: "ability",
+    baseVerb: "找",
+    complement: "到",
+    positive: "can find it",
+    negative: "cannot find it",
+    object: "it",
+    positiveQuestion: "find it",
+    negativeQuestion: "find it",
+  },
+  做得到: {
+    category: "ability",
+    baseVerb: "做",
+    complement: "到",
+    positive: "can do it",
+    negative: "cannot do it",
+    object: "it",
+    positiveQuestion: "do it",
+    negativeQuestion: "do it",
+  },
+  做不到: {
+    category: "ability",
+    baseVerb: "做",
+    complement: "到",
+    positive: "can do it",
+    negative: "cannot do it",
+    object: "it",
+    positiveQuestion: "do it",
+    negativeQuestion: "do it",
+  },
+  办得到: {
+    category: "ability",
+    baseVerb: "办",
+    complement: "到",
+    positive: "can manage it",
+    negative: "cannot manage it",
+    object: "it",
+    positiveQuestion: "manage it",
+    negativeQuestion: "manage it",
+  },
+  办不到: {
+    category: "ability",
+    baseVerb: "办",
+    complement: "到",
+    positive: "can manage it",
+    negative: "cannot manage it",
+    object: "it",
+    positiveQuestion: "manage it",
+    negativeQuestion: "manage it",
+  },
+  学得会: {
+    category: "ability",
+    baseVerb: "学",
+    complement: "会",
+    positive: "can learn it",
+    negative: "cannot learn it",
+    object: "it",
+    positiveQuestion: "learn it",
+    negativeQuestion: "learn it",
+  },
+  学不会: {
+    category: "ability",
+    baseVerb: "学",
+    complement: "会",
+    positive: "can learn it",
+    negative: "cannot learn it",
+    object: "it",
+    positiveQuestion: "learn it",
+    negativeQuestion: "learn it",
+  },
+  记得住: {
+    category: "ability",
+    baseVerb: "记",
+    complement: "住",
+    positive: "can remember it",
+    negative: "cannot remember it",
+    object: "it",
+    positiveQuestion: "remember it",
+    negativeQuestion: "remember it",
+  },
+  记不住: {
+    category: "ability",
+    baseVerb: "记",
+    complement: "住",
+    positive: "can remember it",
+    negative: "cannot remember it",
+    object: "it",
+    positiveQuestion: "remember it",
+    negativeQuestion: "remember it",
+  },
+  打得开: {
+    category: "ability",
+    baseVerb: "打",
+    complement: "开",
+    positive: "can open it",
+    negative: "cannot open it",
+    object: "it",
+    positiveQuestion: "open it",
+    negativeQuestion: "open it",
+  },
+  打不开: {
+    category: "ability",
+    baseVerb: "打",
+    complement: "开",
+    positive: "can open it",
+    negative: "cannot open it",
+    object: "it",
+    positiveQuestion: "open it",
+    negativeQuestion: "open it",
+  },
+  来得及: {
+    category: "feasibility",
+    baseVerb: "来",
+    complement: "及",
+    positive: "can make it in time",
+    negative: "cannot make it in time",
+    object: "it",
+    positiveQuestion: "make it in time",
+    negativeQuestion: "make it in time",
+  },
+  来不及: {
+    category: "feasibility",
+    baseVerb: "来",
+    complement: "及",
+    positive: "can make it in time",
+    negative: "cannot make it in time",
+    object: "it",
+    positiveQuestion: "make it in time",
+    negativeQuestion: "make it in time",
+  },
+};
+
 export const COMPLEMENT_TRANSLATIONS: Record<
   string,
   { positive?: string; negative?: string }
-> = {
-  看得到: { positive: "can see" },
-  看不到: { negative: "cannot see" },
-  看得懂: { positive: "can understand" },
-  看不懂: { negative: "cannot understand" },
-  听得见: { positive: "can hear" },
-  听不见: { negative: "cannot hear" },
-  听得懂: { positive: "can understand" },
-  听不懂: { negative: "cannot understand" },
-  找得到: { positive: "can find" },
-  找不到: { negative: "cannot find" },
-};
+> = Object.fromEntries(
+  Object.entries(COMPLEMENT_MEANINGS).map(([key, value]) => [
+    key,
+    {
+      positive: key.includes("得") ? value.positive : undefined,
+      negative: key.includes("不") ? value.negative : undefined,
+    },
+  ]),
+);
 
 export const DYNAMIC_PASSIVE_PARTICIPLES = new Set([
   "found",

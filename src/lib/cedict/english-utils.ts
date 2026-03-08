@@ -153,6 +153,19 @@ export function stripClassifierGloss(text: string): string {
     .trim();
 }
 
+export function replaceStandaloneObject(
+  phrase: string,
+  objectPhrase: string,
+): string {
+  const normalizedPhrase = phrase.trim();
+  const normalizedObject = objectPhrase.trim();
+  if (!normalizedPhrase || !normalizedObject) {
+    return normalizedPhrase;
+  }
+
+  return normalizedPhrase.replace(/\bit\b/gi, normalizedObject);
+}
+
 export function pluralizeEnglishNoun(nounPhrase: string): string {
   const trimmed = nounPhrase.trim();
   if (!trimmed) {

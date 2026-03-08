@@ -1,7 +1,7 @@
 import {
   ADVERB_TRANSLATIONS,
   ADJECTIVE_TRANSLATIONS,
-  COMPLEMENT_TRANSLATIONS,
+  COMPLEMENT_MEANINGS,
   DEMONSTRATIVE_TRANSLATIONS,
   DESIDERATIVE_TRANSLATIONS,
   DYNAMIC_PASSIVE_PARTICIPLES,
@@ -17,6 +17,7 @@ import {
   SUBJECT_TRANSLATIONS,
   TIME_TRANSLATIONS,
   VERB_TRANSLATIONS,
+  type ComplementMeaning,
 } from "./constants";
 import {
   addSimpleArticle,
@@ -36,6 +37,7 @@ import {
   possessiveForSubject,
   possessivePronounForDeterminer,
   pluralizeEnglishNoun,
+  replaceStandaloneObject,
   stripClassifierGloss,
   toGerund,
   toPastParticiple,
@@ -109,6 +111,21 @@ type PassiveStructure = {
   passiveParticiple?: string;
   isPast: boolean;
   isExperienced: boolean;
+};
+
+type ComplementStructure = {
+  baseWord: string;
+  marker: "得" | "不";
+  complementWord: string;
+  combinedKey: string;
+  lexicalKey: string;
+  meaning?: ComplementMeaning;
+  objectTokens: RuleToken[];
+  expressesAbility: boolean;
+  expressesSuccessfulResult: boolean;
+  expressesFailedResult: boolean;
+  expressesPerceptibility: boolean;
+  expressesFeasibility: boolean;
 };
 
 const ACTION_HINTS: Record<string, ActionHint> = {
@@ -690,6 +707,207 @@ function normalizeArgumentRolePhrase(tokens: RuleToken[]): string {
   return naturalPhrase;
 }
 
+function stripComplementTail(tokens: RuleToken[]): RuleToken[] {
+  return tokens.filter(
+    (token) => token.word !== "了" && !isPunctuationToken(token.word),
+  );
+}
+
+function detectComplementStructure(
+  headWord: string | undefined,
+  tail: RuleToken[],
+): ComplementStructure | null {
+  if (!headWord) {
+    return null;
+  }
+
+  let baseWord = headWord;
+  let marker: "得" | "不" | undefined;
+  let complementWord = "";
+  let objectTokens: RuleToken[] = [];
+
+  const inlineMatch = headWord.match(/^(.+?)(得|不)(.+)$/);
+  if (inlineMatch) {
+    baseWord = inlineMatch[1];
+    marker = inlineMatch[2] as "得" | "不";
+    complementWord = inlineMatch[3];
+    objectTokens = stripComplementTail(tail);
+  } else {
+    const compactTailMatch = tail[0]?.word.match(/^(得|不)(.+)$/);
+    if (compactTailMatch) {
+      marker = compactTailMatch[1] as "得" | "不";
+      complementWord = compactTailMatch[2];
+      objectTokens = stripComplementTail(tail.slice(1));
+    } else {
+      marker = tail[0]?.word as "得" | "不" | undefined;
+      complementWord = tail[1]?.word || "";
+      objectTokens = stripComplementTail(tail.slice(2));
+    }
+  }
+
+  if ((marker !== "得" && marker !== "不") || !complementWord) {
+    return null;
+  }
+
+  const combinedKey = `${baseWord}${marker}${complementWord}`;
+  const lexicalKey = `${baseWord}${complementWord}`;
+  const meaning = COMPLEMENT_MEANINGS[combinedKey];
+  const expressesFeasibility =
+    meaning?.category === "feasibility" ||
+    (baseWord === "来" && complementWord === "及");
+  const expressesPerceptibility =
+    meaning?.category === "perception" ||
+    ((lexicalKey === "看见" || lexicalKey === "听见") && marker === "不");
+  const expressesAbility =
+    Boolean(meaning) ||
+    expressesFeasibility ||
+    Boolean(RESULTATIVE_VERB_TRANSLATIONS[lexicalKey]);
+
+  return {
+    baseWord,
+    marker,
+    complementWord,
+    combinedKey,
+    lexicalKey,
+    meaning,
+    objectTokens,
+    expressesAbility,
+    expressesSuccessfulResult: marker === "得",
+    expressesFailedResult: marker === "不",
+    expressesPerceptibility,
+    expressesFeasibility,
+  };
+}
+
+function detectAbilityComplement(structure: ComplementStructure | null): boolean {
+  return Boolean(structure?.expressesAbility);
+}
+
+function detectResultativeComplement(
+  structure: ComplementStructure | null,
+): boolean {
+  return Boolean(
+    structure &&
+      (Boolean(structure.meaning) ||
+        Boolean(RESULTATIVE_VERB_TRANSLATIONS[structure.lexicalKey])),
+  );
+}
+
+function detectFeasibilityComplement(
+  structure: ComplementStructure | null,
+): boolean {
+  return Boolean(structure?.expressesFeasibility);
+}
+
+function realizeComplementObject(
+  structure: ComplementStructure,
+  fallback = "",
+): string {
+  return (
+    translateNaturalPhrase(structure.objectTokens, { asObject: true }) ||
+    fallback ||
+    structure.meaning?.object ||
+    ""
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function realizeComplementPredicate(
+  structure: ComplementStructure,
+  options?: { forQuestion?: boolean },
+): string | null {
+  const objectPhrase = realizeComplementObject(structure);
+
+  if (structure.meaning) {
+    const template = options?.forQuestion
+      ? structure.expressesFailedResult
+        ? structure.meaning.negativeQuestion || structure.meaning.negative
+        : structure.meaning.positiveQuestion || structure.meaning.positive
+      : structure.expressesFailedResult
+        ? structure.meaning.negative
+        : structure.meaning.positive;
+
+    return replaceStandaloneObject(template, objectPhrase);
+  }
+
+  const resultVerb = RESULTATIVE_VERB_TRANSLATIONS[structure.lexicalKey];
+  if (resultVerb) {
+    const barePredicate = normalizeVerbObjectPhrase(
+      resultVerb,
+      objectPhrase || "it",
+    );
+    return options?.forQuestion
+      ? barePredicate
+      : `${structure.expressesFailedResult ? "cannot" : "can"} ${barePredicate}`;
+  }
+
+  return null;
+}
+
+function buildAbilityComplementSentence(
+  subject: string,
+  structure: ComplementStructure,
+  isQuestion: boolean,
+  adverbs: string[],
+): string | null {
+  const questionPredicate = realizeComplementPredicate(structure, {
+    forQuestion: true,
+  });
+  const statementPredicate = realizeComplementPredicate(structure);
+  if (!questionPredicate || !statementPredicate) {
+    return null;
+  }
+
+  const clause = isQuestion
+    ? buildYesNoQuestion(subject, "modal", questionPredicate, {
+        modal: "can",
+      }).replace(/[?.!]$/, "")
+    : `${subject} ${statementPredicate}`;
+
+  return makeSentence(
+    normalizeClauseOrder(applyAdverbsToClause(clause, subject, adverbs)),
+    isQuestion,
+  );
+}
+
+function buildFeasibilitySentence(
+  subject: string,
+  structure: ComplementStructure,
+  isQuestion: boolean,
+  adverbs: string[],
+  timePhrase: string,
+  hasTerminalLe: boolean,
+): string | null {
+  const hasStill = adverbs.includes("still");
+  const mentionsNow = /\bnow\b/i.test(timePhrase);
+
+  if (!subject) {
+    if (structure.expressesFailedResult) {
+      const clause = mentionsNow ? "It is too late now" : "It is too late";
+      return makeSentence(clause, false);
+    }
+
+    return makeSentence(hasStill ? "There is still time" : "There is time", false);
+  }
+
+  if (isQuestion) {
+    const predicate = realizeComplementPredicate(structure, { forQuestion: true });
+    return predicate
+      ? buildYesNoQuestion(subject, "modal", predicate, { modal: "can" })
+      : null;
+  }
+
+  if (structure.expressesFailedResult && hasTerminalLe) {
+    return makeSentence(`${subject} ${beForm(subject)} too late`, false);
+  }
+
+  return makeSentence(
+    `${subject} ${structure.expressesFailedResult ? "cannot" : "can"} make it in time`,
+    false,
+  );
+}
+
 function addDefiniteArticleIfNeeded(phrase: string): string {
   const normalized = phrase.trim();
   if (!normalized) {
@@ -1138,49 +1356,40 @@ function buildImperativeSentence(tokens: RuleToken[]): string | null {
 
 function buildComplementSentence(
   subject: string,
-  headWord: string,
+  headWord: string | undefined,
   tail: RuleToken[],
   isQuestion: boolean,
   adverbs: string[],
+  timePhrase: string,
 ): string | null {
+  const complement = detectComplementStructure(headWord, tail);
+  if (complement) {
+    if (detectFeasibilityComplement(complement)) {
+      return buildFeasibilitySentence(
+        subject,
+        complement,
+        isQuestion,
+        adverbs,
+        timePhrase,
+        tail.some((token) => token.word === "了"),
+      );
+    }
+
+    if (detectAbilityComplement(complement) || detectResultativeComplement(complement)) {
+      return buildAbilityComplementSentence(
+        subject,
+        complement,
+        isQuestion,
+        adverbs,
+      );
+    }
+  }
+
+  if (!headWord) {
+    return null;
+  }
+
   const baseVerb = VERB_TRANSLATIONS[headWord] || pickPrimaryMeaning(headWord);
-  const complementKey = `${headWord}${tail.map((token) => token.word).join("")}`;
-  const explicitComplement = COMPLEMENT_TRANSLATIONS[complementKey];
-
-  if (explicitComplement?.positive) {
-    return makeSentence(
-      applyAdverbsToClause(
-        `${subject} ${explicitComplement.positive}`,
-        subject,
-        adverbs,
-      ),
-      isQuestion,
-    );
-  }
-
-  if (explicitComplement?.negative) {
-    return makeSentence(
-      applyAdverbsToClause(
-        `${subject} ${explicitComplement.negative}`,
-        subject,
-        adverbs,
-      ),
-      false,
-    );
-  }
-
-  if (tail[0]?.word === "得" && tail[1]?.word === "懂") {
-    return makeSentence(
-      applyAdverbsToClause(`${subject} can understand`, subject, adverbs),
-      isQuestion,
-    );
-  }
-  if (tail[0]?.word === "不" && tail[1]?.word === "懂") {
-    return makeSentence(
-      applyAdverbsToClause(`${subject} cannot understand`, subject, adverbs),
-      false,
-    );
-  }
 
   if (tail[0]?.word === "得") {
     const degree = normalizeDegreeComplement(
@@ -1527,9 +1736,15 @@ function buildContext(wordSegments: WordSegment[]): RuleContext | null {
       prefixIndex += 1;
     }
 
-    const imperativeSentence = buildImperativeSentence(
-      tokens.slice(prefixIndex),
+    const candidateTokens = tokens.slice(prefixIndex);
+    const imperativeCandidate = splitLeadingAdverbs(candidateTokens).remainder;
+    const feasibilityCandidate = detectComplementStructure(
+      imperativeCandidate[0]?.word,
+      imperativeCandidate.slice(1),
     );
+    const imperativeSentence = detectFeasibilityComplement(feasibilityCandidate)
+      ? null
+      : buildImperativeSentence(candidateTokens);
     if (imperativeSentence) {
       return {
         tokens,
@@ -1561,31 +1776,43 @@ function buildContext(wordSegments: WordSegment[]): RuleContext | null {
 
     leadingTimeTokens = tokens.slice(0, cursor);
 
-    let predicateIndex = -1;
-    for (let index = cursor + 1; index < tokens.length; index += 1) {
-      if (isPredicateStartToken(tokens[index].word)) {
-        predicateIndex = index;
-        break;
+    const subjectlessTokens = tokens.slice(cursor);
+    const subjectlessRemainder = splitLeadingAdverbs(subjectlessTokens).remainder;
+    const subjectlessComplement = detectComplementStructure(
+      subjectlessRemainder[0]?.word,
+      subjectlessRemainder.slice(1),
+    );
+    if (detectFeasibilityComplement(subjectlessComplement)) {
+      subjectTokens = [];
+      remainderTokens = subjectlessTokens;
+    } else {
+      let predicateIndex = -1;
+      for (let index = cursor + 1; index < tokens.length; index += 1) {
+        if (isPredicateStartToken(tokens[index].word)) {
+          predicateIndex = index;
+          break;
+        }
       }
-    }
 
-    if (predicateIndex === -1) {
-      predicateIndex = tokens.length;
-    }
+      if (predicateIndex === -1) {
+        predicateIndex = tokens.length;
+      }
 
-    subjectTokens = tokens.slice(cursor, predicateIndex);
-    remainderTokens = tokens.slice(predicateIndex);
+      subjectTokens = tokens.slice(cursor, predicateIndex);
+      remainderTokens = tokens.slice(predicateIndex);
+    }
   }
 
-  if (subjectTokens.length === 0) {
+  if (subjectTokens.length === 0 && remainderTokens.length === 0) {
     return null;
   }
 
-  const subject =
-    translateNaturalPhrase(subjectTokens, { asObject: false }) ||
-    SUBJECT_TRANSLATIONS[subjectTokens[0].word] ||
-    pickPrimaryMeaning(subjectTokens[0].meaning);
-  if (!subject) {
+  const subject = subjectTokens.length
+    ? translateNaturalPhrase(subjectTokens, { asObject: false }) ||
+      SUBJECT_TRANSLATIONS[subjectTokens[0].word] ||
+      pickPrimaryMeaning(subjectTokens[0].meaning)
+    : "";
+  if (subjectTokens.length > 0 && !subject) {
     return null;
   }
 
@@ -1647,10 +1874,12 @@ function matchImperativeRule(context: RuleContext): string | null {
 }
 
 function matchComplementRule(context: RuleContext): string | null {
-  if (
-    !context.head ||
-    (context.tail[0]?.word !== "得" && context.tail[0]?.word !== "不")
-  ) {
+  const complement = detectComplementStructure(context.head, context.tail);
+  if (!complement) {
+    return null;
+  }
+
+  if (!context.subject && !detectFeasibilityComplement(complement)) {
     return null;
   }
 
@@ -1660,9 +1889,16 @@ function matchComplementRule(context: RuleContext): string | null {
     context.tail,
     context.isQuestion,
     context.adverbs,
+    context.timePhrase,
   );
 
-  return sentence ? withSentenceContext(sentence, context.timePhrase) : null;
+  if (!sentence) {
+    return null;
+  }
+
+  return !context.subject && detectFeasibilityComplement(complement)
+    ? sentence
+    : withSentenceContext(sentence, context.timePhrase);
 }
 
 function matchANotARule(context: RuleContext): string | null {
