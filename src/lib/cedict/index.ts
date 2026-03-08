@@ -97,19 +97,28 @@ export function buildExampleBreakdown(
     translationSource: "fallback" as const,
     confidence: 0.42,
   };
-  // Only keep the rule path when its generated English cleared validation.
-  // Otherwise, let an exact full-sentence entry beat it before falling back.
-  const resolvedTranslation = options?.translation?.trim()
-    ? {
-        translation: options.translation.trim(),
-        translationSource: "exact" as const,
-        confidence: 1,
-      }
-    : ruleTranslation.translationSource === "rule"
-      ? ruleTranslation
-      : exactTranslation && isNaturalEnglishCandidate(exactTranslation.translation)
-        ? exactTranslation
-        : fallbackTranslation;
+  let resolvedTranslation: {
+    translation: string;
+    translationSource: TranslationSource;
+    confidence?: number;
+  };
+
+  if (options?.translation?.trim()) {
+    resolvedTranslation = {
+      translation: options.translation.trim(),
+      translationSource: "exact",
+      confidence: 1,
+    };
+  } else if (ruleTranslation.translationSource === "rule") {
+    resolvedTranslation = ruleTranslation;
+  } else if (
+    exactTranslation &&
+    isNaturalEnglishCandidate(exactTranslation.translation)
+  ) {
+    resolvedTranslation = exactTranslation;
+  } else {
+    resolvedTranslation = fallbackTranslation;
+  }
 
   return {
     sentence: trimmedSentence,
