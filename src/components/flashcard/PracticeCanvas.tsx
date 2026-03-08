@@ -494,29 +494,12 @@ export default function PracticeCanvas({
 
       {isExpanded && (
         <div className="flex flex-col items-center gap-3 transition-all duration-300">
-          <div className="relative" style={{ width, height }}>
+          <div className="relative inline-block">
             {/* Grid overlay */}
             {showGrid && (
-              <div
-                className="absolute inset-0 pointer-events-none rounded-lg border border-dashed border-white/15"
-                style={{
-                  backgroundImage: `
-                    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px)
-                  `,
-                  backgroundSize: "50% 50%",
-                }}
-              >
+              <div className="absolute inset-0 pointer-events-none rounded-lg border border-dashed border-white/15 bg-[image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[length:50%_50%]">
                 {/* Diagonal lines for 米 character grid */}
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    backgroundImage: `
-                      linear-gradient(135deg, transparent 49%, rgba(255, 255, 255, 0.04) 50%, transparent 51%),
-                      linear-gradient(45deg, transparent 49%, rgba(255, 255, 255, 0.04) 50%, transparent 51%)
-                    `,
-                  }}
-                />
+                <div className="absolute inset-0 bg-[image:linear-gradient(135deg,transparent_49%,rgba(255,255,255,0.04)_50%,transparent_51%),linear-gradient(45deg,transparent_49%,rgba(255,255,255,0.04)_50%,transparent_51%)]" />
               </div>
             )}
 
@@ -525,11 +508,7 @@ export default function PracticeCanvas({
               ref={canvasRef}
               width={width}
               height={height}
-              className="rounded-lg cursor-crosshair touch-none"
-              style={{
-                background: "rgba(0, 0, 0, 0.25)",
-                boxShadow: "inset 0 3px 15px rgba(0,0,0,0.6)",
-              }}
+              className="rounded-lg cursor-crosshair touch-none bg-[rgba(0,0,0,0.25)] shadow-[inset_0_3px_15px_rgba(0,0,0,0.6)]"
               onPointerDown={(event) => {
                 activePointerIdRef.current = event.pointerId;
                 event.currentTarget.setPointerCapture(event.pointerId);

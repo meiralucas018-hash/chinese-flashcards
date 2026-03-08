@@ -316,6 +316,48 @@ export default function ChineseFlashcardApp() {
     [],
   );
 
+  const getUpdatedExampleBreakdown = useCallback(
+    async (originalCard: CardType, patch: Partial<CardType>) => {
+      const originalExample = originalCard.example.trim();
+      const updatedExample = (patch.example ?? originalCard.example).trim();
+      const exampleChanged = updatedExample !== originalExample;
+
+      if (!updatedExample) {
+        return {
+          example: "",
+          exampleBreakdown: EMPTY_EXAMPLE_BREAKDOWN,
+          usageExamples: undefined,
+        };
+      }
+
+      if (!exampleChanged) {
+        const existingBreakdown =
+          patch.exampleBreakdown &&
+          patch.exampleBreakdown.sentence === updatedExample
+            ? patch.exampleBreakdown
+            : originalCard.exampleBreakdown;
+
+        return {
+          example: updatedExample,
+          exampleBreakdown: existingBreakdown,
+          usageExamples: buildUsageExamples(existingBreakdown),
+        };
+      }
+
+      // When the example text changes, always recompute from the new sentence.
+      const { exampleBreakdown, usageExamples } = await buildCardExampleData({
+        sentence: updatedExample,
+      });
+
+      return {
+        example: updatedExample,
+        exampleBreakdown,
+        usageExamples,
+      };
+    },
+    [buildCardExampleData],
+  );
+
   const handleAutoFetch = useCallback(async () => {
     const inputText = newCardForm.front.trim();
     if (!inputText) {
@@ -475,22 +517,13 @@ export default function ChineseFlashcardApp() {
       if (!card) return;
 
       try {
-        const nextExample = (patch.example ?? card.example).trim();
-        const nextExamplePinyin =
-          patch.exampleBreakdown?.pinyin ?? card.exampleBreakdown.pinyin;
-        const nextExampleTranslation =
-          patch.exampleBreakdown?.translation ??
-          card.exampleBreakdown.translation;
-        const { exampleBreakdown, usageExamples } = await buildCardExampleData({
-          sentence: nextExample,
-          examplePinyin: nextExamplePinyin,
-          exampleTranslation: nextExampleTranslation,
-        });
+        const { example, exampleBreakdown, usageExamples } =
+          await getUpdatedExampleBreakdown(card, patch);
 
         const updatedCard = flashcardDb.ensureCardFields({
           ...card,
           ...patch,
-          example: nextExample,
+          example,
           exampleBreakdown,
           ...(usageExamples ? { usageExamples } : { usageExamples: undefined }),
           updatedAt: Date.now(),
@@ -506,7 +539,7 @@ export default function ChineseFlashcardApp() {
         showToast("Failed to update card");
       }
     },
-    [buildCardExampleData, cards, setCards, showToast],
+    [cards, getUpdatedExampleBreakdown, setCards, showToast],
   );
 
   const handleSearch = useCallback(async () => {

@@ -247,33 +247,23 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
   return (
     <div className="flashcard-container w-full max-w-[760px] mx-auto">
       <div
-        className={`card-inner relative w-full transition-transform duration-500 transform-style-3d ${
-          isFlipped ? "rotate-y-180" : ""
+        className={`card-inner relative w-full transition-transform duration-500 [transform-style:preserve-3d] ${
+          isFlipped
+            ? "[transform:rotateY(180deg)]"
+            : "[transform:rotateY(0deg)]"
         }`}
-        style={{
-          transformStyle: "preserve-3d",
-          transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
-        }}
       >
         {/* Front of Card - Practice Board (Main Focus) */}
         <div
-          className="card-front w-full"
-          style={{
-            backfaceVisibility: "hidden",
-            position: isFlipped ? "absolute" : "relative",
-            top: 0,
-            left: 0,
-          }}
+          className={`card-front w-full [backface-visibility:hidden] top-0 left-0 ${
+            isFlipped ? "absolute" : "relative"
+          }`}
         >
           <div className="bg-gradient-to-b from-white/5 to-transparent rounded-2xl p-6 md:p-8 border border-white/10 shadow-2xl">
             {/* Header with main character (subtle, for reference) */}
             <div className="text-center mb-4">
               <h2
-                className={`text-3xl md:text-4xl font-extrabold cursor-pointer transition-all hover:scale-105 ${getToneClass()}`}
-                style={{
-                  textShadow:
-                    "0 0 18px rgba(96, 165, 250, 0.22), 0 18px 45px rgba(0,0,0,0.55)",
-                }}
+                className={`text-3xl md:text-4xl font-extrabold cursor-pointer transition-all hover:scale-105 [text-shadow:0_0_18px_rgba(96,165,250,0.22),0_18px_45px_rgba(0,0,0,0.55)] ${getToneClass()}`}
                 onClick={handleFlip}
                 title="Click to see answer"
               >
@@ -334,24 +324,15 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
 
         {/* Back of Card - Character Breakdown */}
         <div
-          className="card-back w-full"
-          style={{
-            backfaceVisibility: "hidden",
-            transform: "rotateY(180deg)",
-            position: isFlipped ? "relative" : "absolute",
-            top: 0,
-            left: 0,
-          }}
+          className={`card-back w-full [backface-visibility:hidden] [transform:rotateY(180deg)] top-0 left-0 ${
+            isFlipped ? "relative" : "absolute"
+          }`}
         >
           <div className="bg-gradient-to-b from-white/5 to-transparent rounded-2xl p-6 md:p-8 border border-white/10 shadow-2xl">
             {/* Header */}
             <div className="text-center mb-6">
               <h2
-                className={`text-4xl md:text-5xl font-extrabold cursor-pointer transition-all hover:scale-105 ${getToneClass()}`}
-                style={{
-                  textShadow:
-                    "0 0 20px rgba(96, 165, 250, 0.3), 0 20px 40px rgba(0,0,0,0.5)",
-                }}
+                className={`text-4xl md:text-5xl font-extrabold cursor-pointer transition-all hover:scale-105 [text-shadow:0_0_20px_rgba(96,165,250,0.3),0_20px_40px_rgba(0,0,0,0.5)] ${getToneClass()}`}
                 onClick={handleTTS}
               >
                 {card.front}

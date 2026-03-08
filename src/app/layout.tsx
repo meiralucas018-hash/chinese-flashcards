@@ -72,7 +72,6 @@ export default function RootLayout({
           name="viewport"
           content="width=device-width, initial-scale=1, viewport-fit=cover"
         />
-        <meta name="theme-color" content="#ffffff" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta
           name="apple-mobile-web-app-status-bar-style"
@@ -81,10 +80,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="Chinese Flashcards" />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${notoSansSC.variable} ${notoSerifSC.variable} antialiased bg-background text-foreground font-sans`}
-        style={{
-          fontFamily: `${notoSansSC.style.fontFamily}, 'PingFang SC', 'Microsoft YaHei', 'SimHei', sans-serif`,
-        }}
+        className={`${geistSans.variable} ${geistMono.variable} ${notoSansSC.variable} ${notoSerifSC.variable} font-chinese-ui antialiased bg-background text-foreground font-sans`}
       >
         <ServiceWorkerRegister />
         {children}

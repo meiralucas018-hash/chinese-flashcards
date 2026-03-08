@@ -50,12 +50,16 @@ export default function SettingsView({
               Export Data
             </Button>
             <div>
+              <label htmlFor="import-file" className="sr-only">
+                Import flashcard data JSON file
+              </label>
               <input
                 type="file"
                 accept=".json"
                 onChange={(event) => void onImport(event)}
                 className="hidden"
                 id="import-file"
+                aria-label="Import flashcard data JSON file"
               />
               <Button
                 variant="outline"

@@ -53,7 +53,7 @@
   --accent-purple: #c084fc;
   --border-color: #26262e;
   --tooltip-bg: #2d2d35;
-  
+
   /* Tone colors */
   --tone-1: #60a5fa;
   --tone-2: #4ade80;
@@ -94,9 +94,23 @@
     @apply bg-background text-foreground;
     background-attachment: fixed;
     background-image:
-      radial-gradient(1200px 700px at 30% 10%, rgba(96,165,250,.08), transparent 60%),
-      radial-gradient(900px 600px at 80% 20%, rgba(192,132,252,.06), transparent 55%),
+      radial-gradient(
+        1200px 700px at 30% 10%,
+        rgba(96, 165, 250, 0.08),
+        transparent 60%
+      ),
+      radial-gradient(
+        900px 600px at 80% 20%,
+        rgba(192, 132, 252, 0.06),
+        transparent 55%
+      ),
       linear-gradient(var(--bg-dark), var(--bg-dark));
+  }
+
+  .font-chinese-ui {
+    font-family:
+      var(--font-noto-sans-sc), "PingFang SC", "Microsoft YaHei", "SimHei",
+      sans-serif;
   }
 }
 
@@ -218,7 +232,9 @@
   display: inline;
   cursor: pointer;
   border-radius: 4px;
-  transition: color 0.1s ease, background 0.12s ease;
+  transition:
+    color 0.1s ease,
+    background 0.12s ease;
 }
 
 .char:hover {
@@ -252,7 +268,10 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 14px;
   padding: 14px 14px 12px 14px;
-  transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    transform 0.18s ease,
+    background 0.18s ease;
   cursor: pointer;
 }
 
@@ -306,7 +325,9 @@
   font-size: 0.95em;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.18s ease, transform 0.18s ease;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
   z-index: 9999;
   max-width: min(92vw, 520px);
   white-space: nowrap;
