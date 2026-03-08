@@ -164,6 +164,12 @@ export const SUBJECT_CONTINUATION_CLAUSE_STARTERS = new Set([
   "为什么",
 ]);
 
+export const RESULT_CLAUSE_CONNECTORS = new Set(["结果"]);
+
+export const LATER_CLAUSE_CONNECTORS = new Set(["后来"]);
+
+export const UNTIL_CLAUSE_CONNECTORS = new Set(["直到"]);
+
 export const ADJECTIVE_TRANSLATIONS: Record<string, string> = {
   好: "good",
   高: "tall",
@@ -315,6 +321,7 @@ export const VERB_TRANSLATIONS: Record<string, string> = {
   走: "go",
   等: "wait for",
   告诉: "tell",
+  联系: "keep in touch",
   决定: "decide",
   放弃: "give up",
   忘: "forget",

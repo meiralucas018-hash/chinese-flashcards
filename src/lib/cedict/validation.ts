@@ -760,6 +760,65 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
     ],
   },
   {
+    sentence: "我本来只想看看，结果买了很多东西",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "i originally only wanted to look around",
+      "i ended up buying a lot of things",
+    ],
+    expectedTranslationExcludes: [
+      "to bear fruit",
+      "east and west",
+      "originally am to think",
+    ],
+  },
+  {
+    sentence: "我后来才知道这件事",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["i only found out about this later"],
+    expectedTranslationExcludes: [
+      "am ability to know",
+      "later am",
+      "this matter",
+    ],
+  },
+  {
+    sentence: "后来我们就不联系了",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["later", "stopped keeping in touch"],
+    expectedTranslationExcludes: [
+      "at once",
+      "is we",
+      "connection",
+    ],
+  },
+  {
+    sentence: "直到晚上都没有下",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["did not rain even by evening"],
+    expectedTranslationExcludes: [
+      "all do not have down",
+      "until in the evening",
+      "all haven't",
+    ],
+  },
+  {
+    sentence: "我直到昨天才知道",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["i did not know until yesterday"],
+    expectedTranslationExcludes: ["am until", "ability to know", "until yesterday ability"],
+  },
+  {
+    sentence: "他直到最后一分钟才来",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["he did not come until the last minute"],
+    expectedTranslationExcludes: [
+      "final one minute",
+      "ability to come",
+      "is until",
+    ],
+  },
+  {
     sentence: "如果不是他提醒我，我就忘了。",
     expectedSource: "rule",
     expectedTranslationIncludes: [
@@ -969,6 +1028,41 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
       "to bear fruit",
       "all haven't",
       "down heavy rain",
+    ],
+  },
+  {
+    sentence: "我本来已经准备好了，结果临时出了问题",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "i was originally ready",
+      "but then a problem came up at the last minute",
+    ],
+    expectedTranslationExcludes: ["result", "issue exited", "temporarily"],
+  },
+  {
+    sentence: "我本来想去，但是后来没去了",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "i originally wanted to go",
+      "later i did not end up going",
+    ],
+    expectedTranslationExcludes: [
+      "afterwards drowned",
+      "original to think",
+      "later i did not go",
+    ],
+  },
+  {
+    sentence: "他本来要来，但是后来改主意了",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "he was going to come",
+      "later he changed his mind",
+    ],
+    expectedTranslationExcludes: [
+      "he originally wanted come",
+      "later changed idea",
+      "change one's mind",
     ],
   },
   {

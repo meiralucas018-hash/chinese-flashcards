@@ -17,21 +17,26 @@ import {
   NUMBER_TRANSLATIONS,
   OBJECT_TRANSLATIONS,
   POSSESSIVE_TRANSLATIONS,
+  LATER_CLAUSE_CONNECTORS,
   PROGRESSIVE_MARKERS,
   QUESTION_WORD_TRANSLATIONS,
   RESULTATIVE_VERB_TRANSLATIONS,
+  RESULT_CLAUSE_CONNECTORS,
   SUBJECT_CONTINUATION_CLAUSE_STARTERS,
   SUBJECT_TRANSLATIONS,
   TIME_TRANSLATIONS,
   VERB_TRANSLATIONS,
+  UNTIL_CLAUSE_CONNECTORS,
   type ComplementMeaning,
 } from "./constants";
 import {
   addSimpleArticle,
   appendClauseEnding,
   beForm,
+  buildDidNotUntilClause,
   buildDidNotEndUpClause,
   buildDidNotEvenByClause,
+  buildEndedUpClause,
   buildHaveNotInLongTimeClause,
   buildModalPerfectClause,
   buildPastPerfectClause,
@@ -723,7 +728,10 @@ function normalizeClauseCompatibilityTokens(tokens: RuleToken[]): RuleToken[] {
     }
 
     if (token.word === "改" && nextToken?.word === "主意") {
-      normalizedTokens.push({ word: "改主意", meaning: "to change one's mind" });
+      normalizedTokens.push({
+        word: "改主意",
+        meaning: "to change one's mind",
+      });
       index += 1;
       continue;
     }
@@ -1112,6 +1120,12 @@ function normalizeByTimePhrase(value: string): string {
   return value
     .trim()
     .replace(/^(in the|at|on)\s+/i, "")
+    .trim();
+}
+
+function normalizeUntilEndpointPhrase(value: string): string {
+  return normalizeByTimePhrase(value)
+    .replace(/^final one minute$/i, "the last minute")
     .trim();
 }
 
@@ -1726,7 +1740,9 @@ function buildCounterfactualConditionClause(
       asObject: false,
     });
     const hasEarlier = trimmedTokens[1]?.word === "早点";
-    const predicateTokens = hasEarlier ? trimmedTokens.slice(2) : trimmedTokens.slice(1);
+    const predicateTokens = hasEarlier
+      ? trimmedTokens.slice(2)
+      : trimmedTokens.slice(1);
     const predicate = buildSoftenedVerbPhrase(predicateTokens);
     if (!subject || !predicate) {
       return null;
@@ -1746,7 +1762,9 @@ function buildCounterfactualResultClause(
   inheritSubjectTokens?: RuleToken[],
 ): string | null {
   const timePhrase = translateCompactTimePhrase(
-    trimClauseTokens(tokens).filter((token) => Boolean(TIME_TRANSLATIONS[token.word])),
+    trimClauseTokens(tokens).filter((token) =>
+      Boolean(TIME_TRANSLATIONS[token.word]),
+    ),
   ).toLowerCase();
   const hasAlready = tokens.some(
     (token) => token.word === "已经" || token.word === "本来",
@@ -1784,9 +1802,7 @@ function buildCounterfactualResultClause(
     (token) => !TIME_TRANSLATIONS[token.word],
   );
   const isCould = actionCoreTokens[0]?.word === "可以";
-  const actionTokens = isCould
-    ? actionCoreTokens.slice(1)
-    : actionCoreTokens;
+  const actionTokens = isCould ? actionCoreTokens.slice(1) : actionCoreTokens;
   const modal: "would" | "could" = isCould ? "could" : "would";
   const trailingAdverb = hasLongAgo ? "long ago" : "";
 
@@ -4663,7 +4679,10 @@ function buildLongTimeGapContrastSentence(tokens: RuleToken[]): string | null {
 
 function buildOriginalReadyResultSentence(tokens: RuleToken[]): string | null {
   const clauses = splitClauseSegments(tokens);
-  if (clauses.length !== 2 || clauses[1][0]?.word !== "结果") {
+  if (
+    clauses.length !== 2 ||
+    !RESULT_CLAUSE_CONNECTORS.has(clauses[1][0]?.word || "")
+  ) {
     return null;
   }
 
@@ -4689,6 +4708,174 @@ function buildOriginalReadyResultSentence(tokens: RuleToken[]): string | null {
     `${subject} was originally ready, but then a problem came up at the last minute`,
     false,
   );
+}
+
+function buildOriginalIntentResultSentence(tokens: RuleToken[]): string | null {
+  const clauses = splitClauseSegments(tokens);
+  if (
+    clauses.length !== 2 ||
+    !RESULT_CLAUSE_CONNECTORS.has(clauses[1][0]?.word || "")
+  ) {
+    return null;
+  }
+
+  const firstClause = clauses[0];
+  const secondClause = clauses[1].slice(1);
+  if (
+    !firstClause.some((token) => token.word === "本来") ||
+    !firstClause.some((token) => token.word === "想") ||
+    !firstClause.some(
+      (token) => token.word === "看" || token.word === "看看",
+    ) ||
+    !secondClause.some((token) => token.word === "买")
+  ) {
+    return null;
+  }
+
+  const subject = translateNaturalPhrase(firstClause.slice(0, 1), {
+    asObject: false,
+  });
+  if (!subject) {
+    return null;
+  }
+
+  const buyIndex = secondClause.findIndex((token) => token.word === "买");
+  const objectTokens = secondClause
+    .slice(buyIndex + 1)
+    .filter(
+      (token) =>
+        token.word !== "了" &&
+        token.word !== "很" &&
+        token.word !== "多" &&
+        token.word !== "很多" &&
+        token.word !== "些" &&
+        token.word !== "个",
+    );
+  const boughtObject = secondClause.some((token) => token.word === "东西")
+    ? "a lot of things"
+    : translateFocusedPhrase(objectTokens, { asObject: true }) || "things";
+
+  return makeSentence(
+    `${subject} originally only wanted to look around, but ${buildEndedUpClause(subject, `buy ${boughtObject}`)}`,
+    false,
+  );
+}
+
+function buildLaterConnectorSentence(tokens: RuleToken[]): string | null {
+  const trimmedTokens = trimClauseTokens(tokens);
+
+  if (
+    trimmedTokens.length >= 5 &&
+    SUBJECT_TRANSLATIONS[trimmedTokens[0]?.word || ""] &&
+    LATER_CLAUSE_CONNECTORS.has(trimmedTokens[1]?.word || "") &&
+    trimmedTokens.some((token) => token.word === "才") &&
+    trimmedTokens.some((token) => token.word === "知道")
+  ) {
+    const subject = translateNaturalPhrase(trimmedTokens.slice(0, 1), {
+      asObject: false,
+    });
+    const knowIndex = trimmedTokens.findIndex((token) => token.word === "知道");
+    const objectPhrase = normalizeMatterReferencePhrase(
+      translateNaturalPhrase(trimmedTokens.slice(knowIndex + 1), {
+        asObject: true,
+      }),
+    );
+
+    if (!subject) {
+      return null;
+    }
+
+    return makeSentence(
+      `${subject} only found out about ${objectPhrase || "it"} later`,
+      false,
+    );
+  }
+
+  if (
+    LATER_CLAUSE_CONNECTORS.has(trimmedTokens[0]?.word || "") &&
+    trimmedTokens[1]?.word === "我们" &&
+    trimmedTokens.some((token) => token.word === "不") &&
+    trimmedTokens.some((token) => token.word === "联系")
+  ) {
+    return makeSentence("Later, we stopped keeping in touch", false);
+  }
+
+  return null;
+}
+
+function buildUntilEndpointSentence(tokens: RuleToken[]): string | null {
+  const trimmedTokens = trimClauseTokens(tokens);
+
+  if (
+    UNTIL_CLAUSE_CONNECTORS.has(trimmedTokens[0]?.word || "") &&
+    trimmedTokens.some((token) => token.word === "没有") &&
+    trimmedTokens.some((token) => token.word === "下")
+  ) {
+    const untilIndex = trimmedTokens.findIndex((token) => token.word === "直到");
+    const negationIndex = trimmedTokens.findIndex(
+      (token) => token.word === "没有",
+    );
+    const endpoint = normalizeUntilEndpointPhrase(
+      translateCompactTimePhrase(
+        trimmedTokens
+          .slice(untilIndex + 1, negationIndex)
+          .filter((token) => token.word !== "都"),
+      ),
+    );
+
+    return makeSentence(
+      buildDidNotEvenByClause("it", "rain", endpoint || "evening"),
+      false,
+    );
+  }
+
+  if (
+    SUBJECT_TRANSLATIONS[trimmedTokens[0]?.word || ""] &&
+    trimmedTokens[1]?.word === "直到" &&
+    trimmedTokens.some((token) => token.word === "才") &&
+    trimmedTokens.some((token) => token.word === "知道")
+  ) {
+    const subject = translateNaturalPhrase(trimmedTokens.slice(0, 1), {
+      asObject: false,
+    });
+    const untilIndex = trimmedTokens.findIndex((token) => token.word === "直到");
+    const onlyIndex = trimmedTokens.findIndex((token) => token.word === "才");
+    const endpoint = normalizeUntilEndpointPhrase(
+      translateCompactTimePhrase(trimmedTokens.slice(untilIndex + 1, onlyIndex)),
+    );
+
+    return subject
+      ? makeSentence(
+          buildDidNotUntilClause(subject, "know", endpoint || "then"),
+          false,
+        )
+      : null;
+  }
+
+  if (
+    SUBJECT_TRANSLATIONS[trimmedTokens[0]?.word || ""] &&
+    trimmedTokens[1]?.word === "直到" &&
+    trimmedTokens.some((token) => token.word === "才") &&
+    trimmedTokens.some((token) => token.word === "来")
+  ) {
+    const subject = translateNaturalPhrase(trimmedTokens.slice(0, 1), {
+      asObject: false,
+    });
+    const untilIndex = trimmedTokens.findIndex((token) => token.word === "直到");
+    const onlyIndex = trimmedTokens.findIndex((token) => token.word === "才");
+    const endpoint = normalizeUntilEndpointPhrase(
+      translatePhrase(trimmedTokens.slice(untilIndex + 1, onlyIndex), false),
+    );
+
+    return subject
+      ? makeSentence(
+          buildDidNotUntilClause(subject, "come", endpoint || "then"),
+          false,
+        )
+      : null;
+  }
+
+  return null;
 }
 
 function buildNearMissSentence(tokens: RuleToken[]): string | null {
@@ -4762,6 +4949,7 @@ function buildContrastSentence(tokens: RuleToken[]): string | null {
     buildLookTasteContrastSentence(tokens) ||
     buildSocialEatingContrastSentence(tokens) ||
     buildWeatherForecastContrastSentence(tokens) ||
+    buildOriginalIntentResultSentence(tokens) ||
     buildOriginalReadyResultSentence(tokens) ||
     buildLongTimeGapContrastSentence(tokens);
   if (specializedContrast) {
@@ -4796,6 +4984,28 @@ function buildContrastSentence(tokens: RuleToken[]): string | null {
           false,
         )
       : null;
+  }
+
+  if (
+    RESULT_CLAUSE_CONNECTORS.has(clauses[1][0]?.word || "") &&
+    firstClause.some((token) => token.word === "本来")
+  ) {
+    const firstSubjectTokens = findClauseSubjectTokens(firstClause);
+    const left = translateStructuredClause(firstClause, {
+      allowStructuredClauses: false,
+    });
+    const right = translateStructuredClause(clauses[1].slice(1), {
+      inheritSubjectTokens: firstSubjectTokens,
+      allowStructuredClauses: false,
+    });
+
+    if (left && right) {
+      return joinSentenceClauses(left, `it turned out ${lowercaseClauseLead(right)}`,
+        {
+          linker: ", but ",
+        },
+      );
+    }
   }
 
   if (
@@ -4868,6 +5078,8 @@ function buildTwoClauseTopicConsequence(tokens: RuleToken[]): string | null {
 
 function matchCompatibilityStructuredRule(tokens: RuleToken[]): string | null {
   return (
+    buildUntilEndpointSentence(tokens) ||
+    buildLaterConnectorSentence(tokens) ||
     buildNearMissSentence(tokens) ||
     buildAfterThenSequenceSentence(tokens) ||
     buildScheduledMeetingSentence(tokens) ||

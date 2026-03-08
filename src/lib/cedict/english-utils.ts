@@ -381,6 +381,26 @@ export function buildDidNotEvenByClause(
     : baseClause;
 }
 
+export function buildEndedUpClause(
+  subject: string,
+  verbPhrase: string,
+): string {
+  return `${subject} ended up ${toGerund(verbPhrase)}`.trim();
+}
+
+export function buildDidNotUntilClause(
+  subject: string,
+  verbPhrase: string,
+  timePhrase: string,
+): string {
+  const baseClause = `${subject} did not ${verbPhrase}`.trim();
+  const normalizedTimePhrase = timePhrase.trim();
+
+  return normalizedTimePhrase
+    ? `${baseClause} until ${normalizedTimePhrase}`
+    : baseClause;
+}
+
 export function buildPastPerfectClause(
   subject: string,
   predicate: string,
@@ -388,7 +408,10 @@ export function buildPastPerfectClause(
 ): string {
   const normalizedPredicate = predicate.trim();
   if (!subject.trim() || !normalizedPredicate) {
-    return [subject.trim(), normalizedPredicate].filter(Boolean).join(" ").trim();
+    return [subject.trim(), normalizedPredicate]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
   }
 
   const core = `${subject} had${options?.negative ? " not" : ""} ${toPastParticiple(normalizedPredicate)}`;
