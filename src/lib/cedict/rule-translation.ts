@@ -140,7 +140,8 @@ function expandCompositeMeasureToken(token: RuleToken): RuleToken[] {
     { word: measureWord, meaning: "" },
     {
       word: nounWord,
-      meaning: NOUN_TRANSLATIONS[nounWord] || cleanLexicalMeaning(token.meaning),
+      meaning:
+        NOUN_TRANSLATIONS[nounWord] || cleanLexicalMeaning(token.meaning),
     },
   ];
 }
@@ -273,7 +274,8 @@ function translateNominalPhrase(
     quantity && quantity !== "one"
       ? pluralizeEnglishNoun(nounPhrase)
       : nounPhrase;
-  const leading = possessive || determiner || (quantity === "one" ? "" : quantity);
+  const leading =
+    possessive || determiner || (quantity === "one" ? "" : quantity);
   const phrase = [leading, normalizedNoun].filter(Boolean).join(" ").trim();
 
   if (quantity === "one" && !leading) {
@@ -319,7 +321,10 @@ function translateCopularPredicate(tokens: RuleToken[]): string {
     );
   }
 
-  return translateNaturalPhrase(tokens, { predicatePossessive: true, asObject: false });
+  return translateNaturalPhrase(tokens, {
+    predicatePossessive: true,
+    asObject: false,
+  });
 }
 
 type ANotAPattern =
@@ -352,7 +357,11 @@ function detectANotAPattern(tokens: RuleToken[]): ANotAPattern | null {
     return { kind: "have", remainder: tokens.slice(2) };
   }
 
-  if (first.word === "可以" && second?.word === "不" && third?.word === "可以") {
+  if (
+    first.word === "可以" &&
+    second?.word === "不" &&
+    third?.word === "可以"
+  ) {
     return { kind: "modal", remainder: tokens.slice(3), modal: "can" };
   }
 
@@ -400,14 +409,19 @@ function buildWhoseQuestion(subject: string, tail: RuleToken[]): string | null {
   if (tail.length > 2) {
     const ownedPhrase = translateNominalPhrase(tail);
     return ownedPhrase
-      ? makeSentence(normalizeClauseOrder(`${ownedPhrase} is ${subjectPhrase}`), true)
+      ? makeSentence(
+          normalizeClauseOrder(`${ownedPhrase} is ${subjectPhrase}`),
+          true,
+        )
       : null;
   }
 
   const subjectMatch = subjectPhrase.match(/^(this|that|these|those)\s+(.+)$/i);
   if (subjectMatch) {
     return makeSentence(
-      normalizeClauseOrder(`whose ${subjectMatch[2]} is ${subjectMatch[1].toLowerCase()}`),
+      normalizeClauseOrder(
+        `whose ${subjectMatch[2]} is ${subjectMatch[1].toLowerCase()}`,
+      ),
       true,
     );
   }
@@ -422,7 +436,8 @@ function buildANotAQuestion(context: RuleContext): string | null {
   }
 
   if (pattern.kind === "be") {
-    const predicate = pattern.fixedPredicate || translateCopularPredicate(pattern.remainder);
+    const predicate =
+      pattern.fixedPredicate || translateCopularPredicate(pattern.remainder);
     if (!predicate) {
       return null;
     }
@@ -438,7 +453,9 @@ function buildANotAQuestion(context: RuleContext): string | null {
   }
 
   if (pattern.kind === "have") {
-    const objectPhrase = translateNaturalPhrase(pattern.remainder, { asObject: true });
+    const objectPhrase = translateNaturalPhrase(pattern.remainder, {
+      asObject: true,
+    });
     return objectPhrase
       ? withSentenceContext(
           buildYesNoQuestion(
@@ -453,7 +470,9 @@ function buildANotAQuestion(context: RuleContext): string | null {
 
   if (pattern.kind === "modal") {
     const actionPhrase = translateVerbPhrase(pattern.remainder);
-    const predicate = actionPhrase.text || translateNaturalPhrase(pattern.remainder, { asObject: true });
+    const predicate =
+      actionPhrase.text ||
+      translateNaturalPhrase(pattern.remainder, { asObject: true });
     return predicate
       ? withSentenceContext(
           buildYesNoQuestion(context.subject, "modal", predicate, {
@@ -466,7 +485,9 @@ function buildANotAQuestion(context: RuleContext): string | null {
 
   if (pattern.kind === "desiderative") {
     const actionPhrase = translateVerbPhrase(pattern.remainder);
-    const objectPhrase = translateNaturalPhrase(pattern.remainder, { asObject: true });
+    const objectPhrase = translateNaturalPhrase(pattern.remainder, {
+      asObject: true,
+    });
     const predicate = actionPhrase.isVerbPhrase
       ? `${pattern.verb} to ${actionPhrase.text}`
       : `${pattern.verb} ${objectPhrase}`.trim();
@@ -479,7 +500,9 @@ function buildANotAQuestion(context: RuleContext): string | null {
       : null;
   }
 
-  const objectPhrase = translateNaturalPhrase(pattern.remainder, { asObject: true });
+  const objectPhrase = translateNaturalPhrase(pattern.remainder, {
+    asObject: true,
+  });
   return withSentenceContext(
     buildYesNoQuestion(
       context.subject,
@@ -1057,7 +1080,11 @@ function toInfinitiveActionPhrase(value: string): string {
   if (!normalized) {
     return "do it";
   }
-  if (/^(do|say|make|write|read|call|use|study|work|learn|speak)$/i.test(normalized)) {
+  if (
+    /^(do|say|make|write|read|call|use|study|work|learn|speak)$/i.test(
+      normalized,
+    )
+  ) {
     return `${normalized} it`;
   }
 
@@ -2139,7 +2166,10 @@ function hasBrokenPunctuation(text: string): boolean {
 }
 
 function deriveRuleConfidence(score: number): number {
-  const clampedScore = Math.max(RULE_TRANSLATION_ACCEPTANCE_SCORE, Math.min(95, score));
+  const clampedScore = Math.max(
+    RULE_TRANSLATION_ACCEPTANCE_SCORE,
+    Math.min(95, score),
+  );
   return Number(
     (
       0.55 +
@@ -2161,10 +2191,14 @@ export function scoreRuleTranslation(
 
   const translationWords = tokenizeEnglishWords(trimmedTranslation);
   const glossWords = tokenizeEnglishWords(literalGloss);
-  const normalizedTranslation = normalizeEnglishForComparison(trimmedTranslation);
+  const normalizedTranslation =
+    normalizeEnglishForComparison(trimmedTranslation);
   const normalizedGloss = normalizeEnglishForComparison(literalGloss);
   const imperative = isLikelyImperative(translationWords);
-  const nounPhrase = looksLikeEnglishNounPhrase(trimmedTranslation, translationWords);
+  const nounPhrase = looksLikeEnglishNounPhrase(
+    trimmedTranslation,
+    translationWords,
+  );
   const usefulWords = usefulWordCount(translationWords);
 
   let score = 50;
@@ -2187,7 +2221,11 @@ export function scoreRuleTranslation(
   if (/\b(is|are|am|do|does|can|to)\s+\1\b/i.test(trimmedTranslation)) {
     score -= 20;
   }
-  if (/^(what is you|where is you|why you|what you)\b/i.test(normalizedTranslation)) {
+  if (
+    /^(what is you|where is you|why you|what you)\b/i.test(
+      normalizedTranslation,
+    )
+  ) {
     score -= 18;
   }
   if (/\b(to|for|by|with|of)\s*[.?!]?$/i.test(trimmedTranslation)) {
@@ -2215,7 +2253,10 @@ export function scoreRuleTranslation(
   } else if (imperative) {
     score += 12;
   }
-  if (!/[\u3400-\u9fff]/.test(trimmedTranslation) && !/\//.test(trimmedTranslation)) {
+  if (
+    !/[\u3400-\u9fff]/.test(trimmedTranslation) &&
+    !/\//.test(trimmedTranslation)
+  ) {
     score += 8;
   }
   if (!hasBrokenPunctuation(trimmedTranslation)) {
@@ -2298,7 +2339,6 @@ export function buildNaturalTranslation(
     ruleBasedTranslation &&
     isAcceptableRuleTranslation(ruleBasedTranslation, literalGloss)
   ) {
-
     return {
       translation: ruleBasedTranslation,
       translationSource: "rule",

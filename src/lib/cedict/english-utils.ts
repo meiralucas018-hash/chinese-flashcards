@@ -121,11 +121,17 @@ export function normalizeClauseOrder(text: string): string {
   let normalized = text.replace(/\s+/g, " ").trim();
 
   normalized = normalized
-    .replace(/\b(is|are|am|do|does|did|can|could|should|would|will|to)\s+\1\b/gi, "$1")
+    .replace(
+      /\b(is|are|am|do|does|did|can|could|should|would|will|to)\s+\1\b/gi,
+      "$1",
+    )
     .replace(/\b(what|where|why|how)\s+is\s+you\b/gi, "$1 are you")
     .replace(/\b(what|where|why|how)\s+are\s+i\b/gi, "$1 am I")
     .replace(/\b(why|what|where|how)\s+you\b/gi, "$1 do you")
-    .replace(/\bwhat\s+([^\s]+)\s+(do|does|did)\s+([^\s]+)\b/gi, "what $2 $3 $1")
+    .replace(
+      /\bwhat\s+([^\s]+)\s+(do|does|did)\s+([^\s]+)\b/gi,
+      "what $2 $3 $1",
+    )
     .replace(/\s+([,.;!?])/g, "$1")
     .replace(/([,.;!?])(\S)/g, "$1 $2")
     .replace(/\s+/g, " ")

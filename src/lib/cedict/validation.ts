@@ -110,7 +110,11 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
     sentence: "三本书",
     expectedSource: "rule",
     expectedTranslationIncludes: ["three", "books"],
-    expectedTranslationExcludes: ["classifier", "measure word", "three is book"],
+    expectedTranslationExcludes: [
+      "classifier",
+      "measure word",
+      "three is book",
+    ],
   },
 ];
 
