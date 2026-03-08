@@ -20,6 +20,7 @@ import type {
 import { getDueCards, initializeNewCard } from "@/lib/srs";
 import * as flashcardDb from "@/lib/flashcard-db";
 import { buildExampleBreakdown, loadCedict, searchCedict } from "@/lib/cedict";
+import { convertPinyinTones } from "@/lib/pinyin";
 import { useToastMessage } from "@/hooks/use-toast-message";
 import { useFlashcardData } from "@/hooks/use-flashcard-data";
 import DecksView from "@/components/views/DecksView";
@@ -490,7 +491,11 @@ export default function ChineseFlashcardApp() {
         return;
       }
 
-      setNewCardForm((prev) => ({ ...prev, pinyin, meaning }));
+      setNewCardForm((prev) => ({
+        ...prev,
+        pinyin: convertPinyinTones(pinyin),
+        meaning,
+      }));
 
       showToast("Card fields auto-filled from CEDICT");
     } catch (error) {
@@ -517,7 +522,7 @@ export default function ChineseFlashcardApp() {
       setSentenceAnalysis(analysis);
       setNewCardForm((prev) => ({
         ...prev,
-        examplePinyin: analysis.pinyin,
+        examplePinyin: convertPinyinTones(analysis.pinyin),
         exampleTranslation: analysis.translation,
       }));
       showToast("Sentence analyzed successfully");

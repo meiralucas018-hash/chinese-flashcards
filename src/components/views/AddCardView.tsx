@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useEffectEvent,
   useMemo,
   useState,
   type ReactNode,
@@ -25,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { buildExampleBreakdown, loadCedict } from "@/lib/cedict";
 import { convertPinyinTones } from "@/lib/pinyin";
 import type { Card as CardType, Deck, SentenceAnalysis } from "@/types";
 import CharacterBreakdown from "@/components/flashcard/CharacterBreakdown";
@@ -83,6 +83,11 @@ type EditableCardPatch = Pick<
 
 interface GeneratedWordPreview {
   front: string;
+  breakdown: CardType["exampleBreakdown"];
+}
+
+interface PendingWordLookup {
+  front: string;
   pinyin: string;
   meaning: string;
 }
@@ -104,26 +109,6 @@ function WorkflowActionPanel({
       </div>
       {action}
     </div>
-  );
-}
-
-function ValueSourceBadge({
-  isGenerated,
-  generatedLabel,
-}: {
-  isGenerated: boolean;
-  generatedLabel: string;
-}) {
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[11px] ${
-        isGenerated
-          ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
-          : "border border-white/10 bg-white/[0.05] text-slate-300"
-      }`}
-    >
-      {isGenerated ? generatedLabel : "Custom value"}
-    </span>
   );
 }
 
@@ -315,7 +300,7 @@ export default function AddCardView({
     "word",
   );
   const [pendingWordLookup, setPendingWordLookup] =
-    useState<GeneratedWordPreview | null>(null);
+    useState<PendingWordLookup | null>(null);
   const [wordLookupPreview, setWordLookupPreview] =
     useState<GeneratedWordPreview | null>(null);
 
@@ -333,59 +318,75 @@ export default function AddCardView({
     wordLookupPreview && wordLookupPreview.front === formState.front.trim()
       ? wordLookupPreview
       : null;
+  const sourceChineseInputClass =
+    "min-h-13 border-slate-600/80 bg-slate-900/80 font-chinese-ui text-2xl leading-relaxed text-slate-50 shadow-inner shadow-black/20 focus-visible:border-blue-400/60";
   const hasWordDraft = formState.front.trim().length > 0;
   const hasSentenceDraft = formState.example.trim().length > 0;
-  const savedWordPinyinIsGenerated =
-    Boolean(activeWordPreview) &&
-    formState.pinyin.trim() === (activeWordPreview?.pinyin || "").trim();
-  const savedWordMeaningIsGenerated =
-    Boolean(activeWordPreview) &&
-    formState.meaning.trim() === (activeWordPreview?.meaning || "").trim();
-  const savedSentencePinyinIsGenerated =
-    Boolean(analysisPreview) &&
-    formState.examplePinyin.trim() === (analysisPreview?.pinyin || "").trim();
-  const savedSentenceMeaningIsGenerated =
-    Boolean(analysisPreview) &&
-    formState.exampleTranslation.trim() ===
-      (analysisPreview?.translation || "").trim();
-
-  const finalizePendingWordLookup = useEffectEvent(() => {
-    if (!pendingWordLookup) {
-      return;
-    }
-
-    const trimmedFront = formState.front.trim();
-    if (trimmedFront !== pendingWordLookup.front) {
-      setPendingWordLookup(null);
-      return;
-    }
-
-    const nextPinyin = formState.pinyin.trim();
-    const nextMeaning = formState.meaning.trim();
-    const lookupChanged =
-      nextPinyin !== pendingWordLookup.pinyin ||
-      nextMeaning !== pendingWordLookup.meaning;
-
-    if (lookupChanged || wordLookupPreview?.front === pendingWordLookup.front) {
-      if (nextPinyin || nextMeaning) {
-        setWordLookupPreview({
-          front: trimmedFront,
-          pinyin: nextPinyin,
-          meaning: nextMeaning,
-        });
-      }
-    }
-
-    setPendingWordLookup(null);
-  });
 
   useEffect(() => {
     if (!pendingWordLookup || isAutoFetching) {
       return;
     }
 
-    finalizePendingWordLookup();
-  }, [pendingWordLookup, isAutoFetching, finalizePendingWordLookup]);
+    let isCancelled = false;
+
+    const finalizePendingWordLookup = async () => {
+      const trimmedFront = formState.front.trim();
+      if (trimmedFront !== pendingWordLookup.front) {
+        if (!isCancelled) {
+          setPendingWordLookup(null);
+        }
+        return;
+      }
+
+      const nextPinyin = formState.pinyin.trim();
+      const nextMeaning = formState.meaning.trim();
+      const lookupChanged =
+        nextPinyin !== pendingWordLookup.pinyin ||
+        nextMeaning !== pendingWordLookup.meaning;
+
+      if (!lookupChanged && wordLookupPreview?.front !== pendingWordLookup.front) {
+        if (!isCancelled) {
+          setPendingWordLookup(null);
+        }
+        return;
+      }
+
+      if (!nextPinyin && !nextMeaning) {
+        if (!isCancelled) {
+          setPendingWordLookup(null);
+        }
+        return;
+      }
+
+      const index = await loadCedict();
+      const breakdown = buildExampleBreakdown(trimmedFront, index, {
+        pinyinOverride: nextPinyin || undefined,
+        translation: nextMeaning || undefined,
+      });
+
+      if (!isCancelled) {
+        setWordLookupPreview({
+          front: trimmedFront,
+          breakdown,
+        });
+        setPendingWordLookup(null);
+      }
+    };
+
+    void finalizePendingWordLookup();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    pendingWordLookup,
+    isAutoFetching,
+    formState.front,
+    formState.pinyin,
+    formState.meaning,
+    wordLookupPreview,
+  ]);
 
   const handleWordLookup = async () => {
     const trimmedFront = formState.front.trim();
@@ -483,7 +484,10 @@ export default function AddCardView({
                   onChange={(event) => {
                     const nextFront = event.target.value;
 
-                    if (wordLookupPreview && wordLookupPreview.front !== nextFront.trim()) {
+                    if (
+                      wordLookupPreview &&
+                      wordLookupPreview.front !== nextFront.trim()
+                    ) {
                       setWordLookupPreview(null);
                     }
 
@@ -491,7 +495,7 @@ export default function AddCardView({
                     onFormChange({ front: nextFront });
                   }}
                   placeholder="你好"
-                  className="h-13 border-slate-600/80 bg-slate-900/80 text-2xl text-slate-50 shadow-inner shadow-black/20 focus-visible:border-blue-400/60"
+                  className={`h-13 ${sourceChineseInputClass}`}
                 />
               </div>
 
@@ -511,32 +515,22 @@ export default function AddCardView({
                     ) : (
                       <Sparkles className="mr-2 h-4 w-4" />
                     )}
-                    {isAutoFetching ? "Looking up..." : "Fill from dictionary"}
+                    {isAutoFetching ? "Translating..." : "Translate"}
                   </Button>
                 }
               />
 
               {activeWordPreview && (
                 <div className="space-y-5 rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] p-5 shadow-[0_20px_48px_rgba(0,0,0,0.24)] md:p-6">
-                  <div className="flex flex-col gap-3 border-b border-white/8 pb-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="space-y-3">
-                      <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-2.5 py-1 text-[11px] uppercase tracking-[0.22em] text-blue-100/80">
-                        Dictionary result
-                      </div>
-                      <p className="font-chinese-ui text-3xl font-semibold tracking-tight text-white md:text-4xl">
-                        {activeWordPreview.front}
+                  <div className="space-y-3 border-b border-white/8 pb-4">
+                    <p className="font-chinese-ui text-3xl font-semibold tracking-tight text-white md:text-4xl">
+                      {activeWordPreview.front}
+                    </p>
+                    {activeWordPreview.breakdown.pinyin && (
+                      <p className="text-sm leading-6 text-blue-100/75 md:text-base">
+                        {convertPinyinTones(activeWordPreview.breakdown.pinyin)}
                       </p>
-                      {activeWordPreview.pinyin && (
-                        <p className="text-sm leading-6 text-blue-100/75 md:text-base">
-                          {convertPinyinTones(activeWordPreview.pinyin)}
-                        </p>
-                      )}
-                    </div>
-                    <div className="max-w-xs text-xs leading-5 text-slate-500 sm:text-right">
-                      Generated from the local dictionary lookup. Review it
-                      first, then edit the saved fields below only if you want
-                      an override.
-                    </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -544,15 +538,38 @@ export default function AddCardView({
                       Meaning preview
                     </p>
                     <p className="text-base leading-7 text-slate-50 md:text-lg">
-                      {activeWordPreview.meaning || "No meaning returned from the current lookup."}
+                      {activeWordPreview.breakdown.translation ||
+                        "No meaning returned from the current lookup."}
                     </p>
+                  </div>
+
+                  <div className="space-y-3 border-t border-white/8 pt-4">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm font-medium text-slate-200">
+                        Interactive word map
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Select a word group or character to inspect the breakdown.
+                      </p>
+                    </div>
+                    <CharacterBreakdown
+                      segments={activeWordPreview.breakdown.segments}
+                      pinyin={activeWordPreview.breakdown.pinyin}
+                      translation={activeWordPreview.breakdown.translation}
+                      literalGloss={activeWordPreview.breakdown.literalGloss}
+                      variant="compact"
+                      showPinyinLine={false}
+                      showTranslationLine={false}
+                      showLiteralGlossLine={false}
+                    />
                   </div>
                 </div>
               )}
 
               {!activeWordPreview && hasWordDraft && (
                 <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/35 p-4 text-sm leading-6 text-slate-400">
-                  Run dictionary lookup to preview generated pinyin and meaning before saving.
+                  Run dictionary lookup to preview generated pinyin and meaning
+                  before saving.
                 </div>
               )}
 
@@ -572,14 +589,16 @@ export default function AddCardView({
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between gap-2">
-                      <Label htmlFor="pinyinInput" className="text-sm text-slate-200">
+                      <Label
+                        htmlFor="pinyinInput"
+                        className="text-sm text-slate-200"
+                      >
                         Saved pinyin
                       </Label>
-                      {activeWordPreview && (
-                        <ValueSourceBadge
-                          isGenerated={savedWordPinyinIsGenerated}
-                          generatedLabel="Generated from lookup"
-                        />
+                      {formState.pinyin && (
+                        <span className="text-xs text-blue-200">
+                          {convertPinyinTones(formState.pinyin)}
+                        </span>
                       )}
                     </div>
                     <Input
@@ -588,27 +607,24 @@ export default function AddCardView({
                       onChange={(event) =>
                         onFormChange({ pinyin: event.target.value })
                       }
-                      placeholder="ni3 hao3"
+                      onBlur={() =>
+                        onFormChange({
+                          pinyin: convertPinyinTones(formState.pinyin),
+                        })
+                      }
+                      placeholder="nǐ hǎo"
                       className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
                     />
-                    {formState.pinyin && (
-                      <div className="text-sm text-blue-200">
-                        {convertPinyinTones(formState.pinyin)}
-                      </div>
-                    )}
                   </div>
 
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between gap-2">
-                      <Label htmlFor="meaningInput" className="text-sm text-slate-200">
+                      <Label
+                        htmlFor="meaningInput"
+                        className="text-sm text-slate-200"
+                      >
                         Saved meaning
                       </Label>
-                      {activeWordPreview && (
-                        <ValueSourceBadge
-                          isGenerated={savedWordMeaningIsGenerated}
-                          generatedLabel="Generated from lookup"
-                        />
-                      )}
                     </div>
                     <Input
                       id="meaningInput"
@@ -646,7 +662,7 @@ export default function AddCardView({
                     onFormChange({ example: event.target.value })
                   }
                   placeholder="你好吗？"
-                  className="min-h-13 resize-y border-slate-600/80 bg-slate-900/80 text-lg text-slate-100 focus-visible:border-blue-400/60 md:text-xl"
+                  className={`resize-y ${sourceChineseInputClass}`}
                   rows={1}
                 />
               </div>
@@ -667,30 +683,20 @@ export default function AddCardView({
                     ) : (
                       <Sparkles className="mr-2 h-4 w-4" />
                     )}
-                    {isAnalyzingSentence ? "Analyzing..." : "Analyze sentence"}
+                    {isAnalyzingSentence ? "Translating..." : "Translate"}
                   </Button>
                 }
               />
 
               {analysisPreview && (
                 <div className="space-y-5 rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] p-5 shadow-[0_20px_48px_rgba(0,0,0,0.24)] md:p-6">
-                  <div className="flex flex-col gap-3 border-b border-white/8 pb-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="space-y-3">
-                      <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-2.5 py-1 text-[11px] uppercase tracking-[0.22em] text-blue-100/80">
-                        Generated preview
-                      </div>
-                      <p className="font-chinese-ui text-3xl font-semibold tracking-tight text-white md:text-4xl">
-                        {analysisPreview.sentence}
-                      </p>
-                      <p className="text-sm leading-6 text-blue-100/75 md:text-base">
-                        {convertPinyinTones(analyzedPinyin)}
-                      </p>
-                    </div>
-                    <div className="max-w-xs text-xs leading-5 text-slate-500 sm:text-right">
-                      Generated from the local sentence-analysis engine. Review
-                      it first, then edit the saved fields below only if you
-                      want an override.
-                    </div>
+                  <div className="space-y-3 border-b border-white/8 pb-4">
+                    <p className="font-chinese-ui text-3xl font-semibold tracking-tight text-white md:text-4xl">
+                      {analysisPreview.sentence}
+                    </p>
+                    <p className="text-sm leading-6 text-blue-100/75 md:text-base">
+                      {convertPinyinTones(analyzedPinyin)}
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -787,11 +793,10 @@ export default function AddCardView({
                       >
                         Saved pinyin
                       </Label>
-                      {analysisPreview && (
-                        <ValueSourceBadge
-                          isGenerated={savedSentencePinyinIsGenerated}
-                          generatedLabel="Generated from analysis"
-                        />
+                      {formState.examplePinyin && (
+                        <span className="text-xs text-blue-200">
+                          {convertPinyinTones(formState.examplePinyin)}
+                        </span>
                       )}
                     </div>
                     <Input
@@ -800,14 +805,16 @@ export default function AddCardView({
                       onChange={(event) =>
                         onFormChange({ examplePinyin: event.target.value })
                       }
-                      placeholder="ni3 hao3 ma5"
+                      onBlur={() =>
+                        onFormChange({
+                          examplePinyin: convertPinyinTones(
+                            formState.examplePinyin,
+                          ),
+                        })
+                      }
+                      placeholder="nǐ hǎo ma"
                       className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
                     />
-                    {formState.examplePinyin && (
-                      <div className="text-sm text-blue-200">
-                        {convertPinyinTones(formState.examplePinyin)}
-                      </div>
-                    )}
                   </div>
 
                   <div className="space-y-2.5">
@@ -818,12 +825,6 @@ export default function AddCardView({
                       >
                         Saved meaning
                       </Label>
-                      {analysisPreview && (
-                        <ValueSourceBadge
-                          isGenerated={savedSentenceMeaningIsGenerated}
-                          generatedLabel="Generated from analysis"
-                        />
-                      )}
                     </div>
                     <Input
                       id="exampleTranslation"
