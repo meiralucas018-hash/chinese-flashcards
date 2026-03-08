@@ -514,7 +514,7 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
   {
     sentence: "你等我一下。",
     expectedSource: "rule",
-    expectedTranslationIncludes: ["wait for me", "moment"],
+    expectedTranslationIncludes: ["wait a moment for me"],
     expectedTranslationExcludes: ["give it a go", "wait for i"],
   },
   {

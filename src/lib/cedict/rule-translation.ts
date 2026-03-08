@@ -280,7 +280,9 @@ function expandCompositeMeasureToken(token: RuleToken): RuleToken[] {
     {
       word: nounWord,
       meaning:
-        NOUN_TRANSLATIONS[nounWord] || cleanLexicalMeaning(token.meaning),
+        measureWord === "件" && nounWord === "衣服"
+          ? "piece of clothing"
+          : NOUN_TRANSLATIONS[nounWord] || cleanLexicalMeaning(token.meaning),
     },
   ];
 }
@@ -365,6 +367,7 @@ function translateNominalPhrase(
   for (let index = 0; index < expandedTokens.length; index += 1) {
     const token = expandedTokens[index];
     const nextToken = expandedTokens[index + 1];
+    const previousToken = expandedTokens[index - 1];
 
     if (token.word === "的" || token.word === "了") {
       continue;
@@ -393,6 +396,11 @@ function translateNominalPhrase(
     }
 
     if (MEASURE_WORDS.has(token.word)) {
+      continue;
+    }
+
+    if (token.word === "衣服" && previousToken?.word === "件") {
+      nounParts.push("piece of clothing");
       continue;
     }
 
@@ -798,6 +806,13 @@ function buildSoftenedVerbPhrase(tokens: RuleToken[]): string {
   const comitativePhrase = buildComitativeVerbPhrase(strippedTokens);
   if (comitativePhrase) {
     return comitativePhrase;
+  }
+
+  if (softened && strippedTokens[0]?.word === "等") {
+    const objectPhrase = translateNaturalPhrase(strippedTokens.slice(1), {
+      asObject: true,
+    });
+    return objectPhrase ? `wait a moment for ${objectPhrase}` : "wait a moment";
   }
 
   if (
