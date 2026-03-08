@@ -3,6 +3,7 @@ import {
   ENGLISH_POSSESSIVES,
   FRONTED_TIME_PHRASES,
   IN_LOCATIONS,
+  POSSESSIVE_PRONOUN_TRANSLATIONS,
 } from "./constants";
 
 export function isQuestionMarkToken(word: string): boolean {
@@ -131,6 +132,54 @@ export function normalizeClauseOrder(text: string): string {
     .trim();
 
   return normalized;
+}
+
+export function stripClassifierGloss(text: string): string {
+  return text
+    .replace(/\(.*?\)/g, " ")
+    .replace(/\bclassifier\b.*$/gi, " ")
+    .replace(/\bmeasure word\b.*$/gi, " ")
+    .replace(/\bcl:\b.*$/gi, " ")
+    .replace(/\badverb of degree\b/gi, " ")
+    .replace(/\blanguage\b/gi, " ")
+    .replace(/\s+or\s+(him|her|them|us|me)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function pluralizeEnglishNoun(nounPhrase: string): string {
+  const trimmed = nounPhrase.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  const parts = trimmed.split(/\s+/);
+  const lastWord = parts[parts.length - 1].toLowerCase();
+  const irregularPlurals: Record<string, string> = {
+    person: "people",
+    man: "men",
+    woman: "women",
+    child: "children",
+  };
+
+  let plural = irregularPlurals[lastWord] || "";
+  if (!plural) {
+    if (/[^aeiou]y$/i.test(lastWord)) {
+      plural = `${lastWord.slice(0, -1)}ies`;
+    } else if (/(s|sh|ch|x|z)$/i.test(lastWord)) {
+      plural = `${lastWord}es`;
+    } else {
+      plural = `${lastWord}s`;
+    }
+  }
+
+  parts[parts.length - 1] = plural;
+  return parts.join(" ");
+}
+
+export function possessivePronounForDeterminer(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  return POSSESSIVE_PRONOUN_TRANSLATIONS[normalized] || value.trim();
 }
 
 export function buildYesNoQuestion(

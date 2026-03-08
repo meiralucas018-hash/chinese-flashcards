@@ -5,6 +5,7 @@ export type CedictValidationCase = {
   sentence: string;
   expectedSource?: "exact" | "rule" | "fallback";
   expectedTranslationIncludes: string[];
+  expectedTranslationExcludes?: string[];
 };
 
 export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
@@ -51,6 +52,66 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
   { sentence: "他给我写信。", expectedTranslationIncludes: ["for me"] },
   { sentence: "她很高兴。", expectedTranslationIncludes: ["happy"] },
   { sentence: "我没有时间。", expectedTranslationIncludes: ["have", "time"] },
+  {
+    sentence: "你会不会说中文",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["can", "you", "speak", "chinese"],
+    expectedTranslationExcludes: ["can or cannot", "persuade", "classifier"],
+  },
+  {
+    sentence: "你是不是学生",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["are", "you", "student"],
+    expectedTranslationExcludes: ["is or isn't", "classifier"],
+  },
+  {
+    sentence: "你有没有时间",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["do", "you", "have", "time"],
+    expectedTranslationExcludes: ["haven't", "classifier"],
+  },
+  {
+    sentence: "你去不去",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["you", "go"],
+    expectedTranslationExcludes: ["negative prefix", "classifier"],
+  },
+  {
+    sentence: "这是我的",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["this", "mine"],
+    expectedTranslationExcludes: ["of", "classifier"],
+  },
+  {
+    sentence: "这是谁的书",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["whose", "book", "this"],
+    expectedTranslationExcludes: ["who book", "classifier"],
+  },
+  {
+    sentence: "这本书是谁的",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["whose", "book", "this"],
+    expectedTranslationExcludes: ["classifier"],
+  },
+  {
+    sentence: "这是不是你的书",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["is", "this", "your", "book"],
+    expectedTranslationExcludes: ["is or isn't", "classifier"],
+  },
+  {
+    sentence: "一个人",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["person"],
+    expectedTranslationExcludes: ["by oneself", "classifier", "measure word"],
+  },
+  {
+    sentence: "三本书",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["three", "books"],
+    expectedTranslationExcludes: ["classifier", "measure word", "three is book"],
+  },
 ];
 
 export async function runCedictValidation(): Promise<
@@ -69,6 +130,9 @@ export async function runCedictValidation(): Promise<
     const passedIncludes = testCase.expectedTranslationIncludes.every(
       (fragment) => lowerTranslation.includes(fragment),
     );
+    const passedExcludes = (testCase.expectedTranslationExcludes || []).every(
+      (fragment) => !lowerTranslation.includes(fragment),
+    );
     const passedSource =
       !testCase.expectedSource ||
       result.translationSource === testCase.expectedSource;
@@ -77,7 +141,7 @@ export async function runCedictValidation(): Promise<
       sentence: testCase.sentence,
       translation: result.translation,
       translationSource: result.translationSource,
-      passed: passedIncludes && passedSource,
+      passed: passedIncludes && passedExcludes && passedSource,
     };
   });
 }

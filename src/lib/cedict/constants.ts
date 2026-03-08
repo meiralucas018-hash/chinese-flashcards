@@ -25,9 +25,24 @@ export const OBJECT_TRANSLATIONS: Record<string, string> = {
   他们: "them",
   她们: "them",
   它们: "them",
+  人: "person",
+  书: "book",
+  时间: "time",
+  名字: "name",
+  老师: "teacher",
+  学生: "student",
   中文: "Chinese",
   汉语: "Chinese",
   汉文: "Chinese",
+};
+
+export const DEMONSTRATIVE_TRANSLATIONS: Record<string, string> = {
+  这: "this",
+  这个: "this",
+  这些: "these",
+  那: "that",
+  那个: "that",
+  那些: "those",
 };
 
 export const POSSESSIVE_TRANSLATIONS: Record<string, string> = {
@@ -44,6 +59,17 @@ export const POSSESSIVE_TRANSLATIONS: Record<string, string> = {
   它们: "their",
   这: "this",
   那: "that",
+};
+
+export const POSSESSIVE_PRONOUN_TRANSLATIONS: Record<string, string> = {
+  my: "mine",
+  your: "yours",
+  his: "his",
+  her: "hers",
+  its: "its",
+  our: "ours",
+  their: "theirs",
+  whose: "whose",
 };
 
 export const ENGLISH_POSSESSIVES: Record<string, string> = {
@@ -165,6 +191,8 @@ export const VERB_TRANSLATIONS: Record<string, string> = {
   想: "want",
   要: "want",
   会: "can",
+  能: "can",
+  可以: "can",
   去: "go",
   来: "come",
   看: "see",
@@ -216,6 +244,17 @@ export const VERB_TRANSLATIONS: Record<string, string> = {
   买到: "buy",
   吃完: "finish eating",
   说完: "finish speaking",
+};
+
+export const MODAL_TRANSLATIONS: Record<string, string> = {
+  会: "can",
+  能: "can",
+  可以: "can",
+};
+
+export const DESIDERATIVE_TRANSLATIONS: Record<string, string> = {
+  想: "want",
+  要: "want",
 };
 
 export const RESULTATIVE_VERB_TRANSLATIONS: Record<string, string> = {
@@ -286,3 +325,26 @@ export const MEASURE_WORDS = new Set([
   "件",
   "些",
 ]);
+
+export const NUMBER_TRANSLATIONS: Record<string, string> = {
+  一: "one",
+  二: "two",
+  两: "two",
+  三: "three",
+  四: "four",
+  五: "five",
+  六: "six",
+  七: "seven",
+  八: "eight",
+  九: "nine",
+  十: "ten",
+};
+
+export const NOUN_TRANSLATIONS: Record<string, string> = {
+  人: "person",
+  书: "book",
+  时间: "time",
+  名字: "name",
+  老师: "teacher",
+  学生: "student",
+};
