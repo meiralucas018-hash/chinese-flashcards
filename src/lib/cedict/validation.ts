@@ -690,6 +690,89 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
     ],
   },
   {
+    sentence: "我差点迟到。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["i was almost late"],
+    expectedTranslationExcludes: ["difference point", "almost arrive to"],
+  },
+  {
+    sentence: "我差一点就忘了。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["i almost forgot"],
+    expectedTranslationExcludes: ["almost remember", "difference point"],
+  },
+  {
+    sentence: "我差点没听懂。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["i almost did not understand"],
+    expectedTranslationExcludes: ["i almost understood", "difference point"],
+  },
+  {
+    sentence: "要不是你帮我，我早就放弃了。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "if you had not helped me",
+      "i would have given up long ago",
+    ],
+    expectedTranslationExcludes: [
+      "if want not",
+      "i already give up",
+      "if not you help me",
+    ],
+  },
+  {
+    sentence: "如果你早点告诉我，我昨天就可以帮你了。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "if you had told me earlier",
+      "i could have helped you yesterday",
+    ],
+    expectedTranslationExcludes: [
+      "if you tell me earlier",
+      "i yesterday can help you",
+      "could help you yesterday",
+    ],
+  },
+  {
+    sentence: "他本来要来，但是后来改主意了。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "he was going to come",
+      "later he changed his mind",
+    ],
+    expectedTranslationExcludes: [
+      "he originally wanted come",
+      "later changed idea",
+      "change one's mind",
+    ],
+  },
+  {
+    sentence: "我本来已经准备好了，结果临时出了问题。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "i was originally ready",
+      "a problem came up at the last minute",
+    ],
+    expectedTranslationExcludes: [
+      "result temporarily",
+      "issue exited",
+      "i originally already prepare good",
+    ],
+  },
+  {
+    sentence: "如果不是他提醒我，我就忘了。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "if he had not reminded me",
+      "i would have forgotten",
+    ],
+    expectedTranslationExcludes: [
+      "if not he remind me",
+      "i then forgot",
+      "i will forget",
+    ],
+  },
+  {
     sentence: "我叫小李。",
     expectedSource: "rule",
     expectedTranslationIncludes: ["my name is xiao li"],

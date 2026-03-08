@@ -33,6 +33,8 @@ import {
   buildDidNotEndUpClause,
   buildDidNotEvenByClause,
   buildHaveNotInLongTimeClause,
+  buildModalPerfectClause,
+  buildPastPerfectClause,
   buildEmbeddedWhClause,
   buildWhQuestion,
   buildYesNoQuestion,
@@ -709,6 +711,41 @@ function normalizeClauseCompatibilityTokens(tokens: RuleToken[]): RuleToken[] {
       continue;
     }
 
+    if (token.word === "差一点") {
+      normalizedTokens.push({ word: "差点", meaning: "almost" });
+      continue;
+    }
+
+    if (token.word === "差" && nextToken?.word === "一点") {
+      normalizedTokens.push({ word: "差点", meaning: "almost" });
+      index += 1;
+      continue;
+    }
+
+    if (token.word === "改" && nextToken?.word === "主意") {
+      normalizedTokens.push({ word: "改主意", meaning: "to change one's mind" });
+      index += 1;
+      continue;
+    }
+
+    if (token.word === "准备" && nextToken?.word === "好") {
+      normalizedTokens.push({ word: "准备好", meaning: "to be ready" });
+      index += 1;
+      continue;
+    }
+
+    if (token.word === "摔" && nextToken?.word === "倒") {
+      normalizedTokens.push({ word: "摔倒", meaning: "to fall" });
+      index += 1;
+      continue;
+    }
+
+    if (token.word === "迟" && nextToken?.word === "到") {
+      normalizedTokens.push({ word: "迟到", meaning: "to arrive late" });
+      index += 1;
+      continue;
+    }
+
     normalizedTokens.push(token);
   }
 
@@ -1072,7 +1109,10 @@ function normalizeMatterReferencePhrase(value: string): string {
 }
 
 function normalizeByTimePhrase(value: string): string {
-  return value.trim().replace(/^(in the|at|on)\s+/i, "").trim();
+  return value
+    .trim()
+    .replace(/^(in the|at|on)\s+/i, "")
+    .trim();
 }
 
 function findClauseSubjectTokens(tokens: RuleToken[]): RuleToken[] {
@@ -1317,7 +1357,8 @@ function detectConditionalStructure(
   tokens: RuleToken[],
 ): ConditionalStructure | null {
   const trimmedTokens = trimClauseTokens(tokens);
-  if (trimmedTokens[0]?.word !== "如果") {
+  const leadWord = trimmedTokens[0]?.word;
+  if (leadWord !== "如果" && leadWord !== "要不是") {
     return null;
   }
 
@@ -1613,6 +1654,180 @@ function buildConditionalResultClause(
   });
 }
 
+function shouldUseCounterfactualConditional(
+  leadWord: string | undefined,
+  conditionTokens: RuleToken[],
+): boolean {
+  if (leadWord === "要不是") {
+    return true;
+  }
+
+  const firstWord = conditionTokens[0]?.word;
+  return (
+    firstWord === "不是" ||
+    firstWord === "没有" ||
+    conditionTokens.some((token) => token.word === "早点")
+  );
+}
+
+function buildCounterfactualConditionClause(
+  tokens: RuleToken[],
+  options?: { forceNegative?: boolean },
+): string | null {
+  const trimmedTokens = trimClauseTokens(tokens).filter(
+    (token) => token.word !== "了",
+  );
+  if (trimmedTokens.length === 0) {
+    return null;
+  }
+
+  if (
+    trimmedTokens[0]?.word === "不是" &&
+    trimmedTokens[1]?.word === "因为" &&
+    trimmedTokens.some((token) => token.word === "下大雨")
+  ) {
+    const rainTimePhrase = translateCompactTimePhrase(
+      trimmedTokens.filter((token) => Boolean(TIME_TRANSLATIONS[token.word])),
+    ).toLowerCase();
+    const sudden = trimmedTokens.some((token) => token.word === "突然")
+      ? " suddenly"
+      : "";
+    return `it had not${sudden} rained heavily${rainTimePhrase ? ` ${rainTimePhrase}` : ""}`;
+  }
+
+  if (
+    trimmedTokens[0]?.word === "不是" &&
+    SUBJECT_TRANSLATIONS[trimmedTokens[1]?.word || ""]
+  ) {
+    const subject = translateNaturalPhrase(trimmedTokens.slice(1, 2), {
+      asObject: false,
+    });
+    const predicate = buildSoftenedVerbPhrase(trimmedTokens.slice(2));
+    return subject && predicate
+      ? buildPastPerfectClause(subject, predicate, { negative: true })
+      : null;
+  }
+
+  if (
+    trimmedTokens[0]?.word === "没有" &&
+    SUBJECT_TRANSLATIONS[trimmedTokens[1]?.word || ""]
+  ) {
+    const subject = translateNaturalPhrase(trimmedTokens.slice(1, 2), {
+      asObject: false,
+    });
+    const predicate = buildSoftenedVerbPhrase(trimmedTokens.slice(2));
+    return subject && predicate
+      ? buildPastPerfectClause(subject, predicate, { negative: true })
+      : null;
+  }
+
+  if (SUBJECT_TRANSLATIONS[trimmedTokens[0]?.word || ""]) {
+    const subject = translateNaturalPhrase(trimmedTokens.slice(0, 1), {
+      asObject: false,
+    });
+    const hasEarlier = trimmedTokens[1]?.word === "早点";
+    const predicateTokens = hasEarlier ? trimmedTokens.slice(2) : trimmedTokens.slice(1);
+    const predicate = buildSoftenedVerbPhrase(predicateTokens);
+    if (!subject || !predicate) {
+      return null;
+    }
+
+    return buildPastPerfectClause(subject, predicate, {
+      negative: options?.forceNegative,
+      trailingAdverb: hasEarlier ? "earlier" : "",
+    });
+  }
+
+  return null;
+}
+
+function buildCounterfactualResultClause(
+  tokens: RuleToken[],
+  inheritSubjectTokens?: RuleToken[],
+): string | null {
+  const timePhrase = translateCompactTimePhrase(
+    trimClauseTokens(tokens).filter((token) => Boolean(TIME_TRANSLATIONS[token.word])),
+  ).toLowerCase();
+  const hasAlready = tokens.some(
+    (token) => token.word === "已经" || token.word === "本来",
+  );
+  const hasLongAgo = tokens.some((token) => token.word === "早就");
+
+  let trimmedTokens = trimClauseTokens(tokens).filter(
+    (token) =>
+      token.word !== "就" &&
+      token.word !== "本来" &&
+      token.word !== "已经" &&
+      token.word !== "早就" &&
+      token.word !== "了",
+  );
+
+  const explicitSubjectTokens = findClauseSubjectTokens(trimmedTokens);
+  const subjectTokens = explicitSubjectTokens.length
+    ? explicitSubjectTokens
+    : inheritSubjectTokens || [];
+  const subject = subjectTokens.length
+    ? translateNaturalPhrase(subjectTokens, { asObject: false })
+    : "";
+  if (!subject) {
+    return null;
+  }
+
+  if (
+    explicitSubjectTokens.length &&
+    SUBJECT_TRANSLATIONS[trimmedTokens[0]?.word || ""]
+  ) {
+    trimmedTokens = trimmedTokens.slice(1);
+  }
+
+  const actionCoreTokens = trimmedTokens.filter(
+    (token) => !TIME_TRANSLATIONS[token.word],
+  );
+  const isCould = actionCoreTokens[0]?.word === "可以";
+  const actionTokens = isCould
+    ? actionCoreTokens.slice(1)
+    : actionCoreTokens;
+  const modal: "would" | "could" = isCould ? "could" : "would";
+  const trailingAdverb = hasLongAgo ? "long ago" : "";
+
+  if (actionTokens[0]?.word === "到") {
+    const destinationPhrase = translateNaturalPhrase(actionTokens.slice(1), {
+      asObject: true,
+    });
+    const predicate =
+      destinationPhrase.toLowerCase() === "there"
+        ? "get there"
+        : destinationPhrase
+          ? `arrive at ${destinationPhrase}`
+          : "get there";
+
+    return buildModalPerfectClause(subject, modal, predicate, {
+      already: hasAlready,
+      trailingAdverb,
+      timePhrase,
+    });
+  }
+
+  if (actionTokens[0]?.word === "忘") {
+    return buildModalPerfectClause(subject, modal, "forget", {
+      already: hasAlready,
+      trailingAdverb,
+      timePhrase,
+    });
+  }
+
+  const predicate = buildSoftenedVerbPhrase(actionTokens);
+  if (!predicate) {
+    return null;
+  }
+
+  return buildModalPerfectClause(subject, modal, predicate, {
+    already: hasAlready,
+    trailingAdverb,
+    timePhrase,
+  });
+}
+
 function buildRelativeModifierClause(tokens: RuleToken[]): string | null {
   if (tokens.length === 0) {
     return null;
@@ -1707,7 +1922,9 @@ function buildConditionalSentence(tokens: RuleToken[]): string | null {
     clauseSegments[1].some((token) => token.word === "到")
   ) {
     const rainTimePhrase = translateCompactTimePhrase(
-      clauseSegments[0].filter((token) => Boolean(TIME_TRANSLATIONS[token.word])),
+      clauseSegments[0].filter((token) =>
+        Boolean(TIME_TRANSLATIONS[token.word]),
+      ),
     ).toLowerCase();
     const destinationIndex = clauseSegments[1].findIndex(
       (token) => token.word === "到",
@@ -1752,9 +1969,12 @@ function buildConditionalSentence(tokens: RuleToken[]): string | null {
       structure.resultTokens[2]?.word === "没") &&
     structure.resultTokens[3]?.word === "告诉"
   ) {
-    const subject = translateNaturalPhrase(structure.conditionTokens.slice(0, 1), {
-      asObject: false,
-    });
+    const subject = translateNaturalPhrase(
+      structure.conditionTokens.slice(0, 1),
+      {
+        asObject: false,
+      },
+    );
     const knownPhrase = normalizeMatterReferencePhrase(
       translateNaturalPhrase(structure.conditionTokens.slice(3), {
         asObject: true,
@@ -1768,6 +1988,34 @@ function buildConditionalSentence(tokens: RuleToken[]): string | null {
       return makeSentence(
         `If ${subject} knew about ${knownPhrase} long ago, why did ${subject} never tell ${toldObject}`,
         true,
+      );
+    }
+  }
+
+  if (
+    shouldUseCounterfactualConditional(
+      trimmedTokens[0]?.word,
+      structure.conditionTokens,
+    )
+  ) {
+    const conditionSubjectTokens = findClauseSubjectTokens(
+      structure.conditionTokens,
+    );
+    const counterfactualConditionClause = buildCounterfactualConditionClause(
+      structure.conditionTokens,
+      {
+        forceNegative: trimmedTokens[0]?.word === "要不是",
+      },
+    );
+    const counterfactualResultClause = buildCounterfactualResultClause(
+      structure.resultTokens,
+      conditionSubjectTokens,
+    );
+
+    if (counterfactualConditionClause && counterfactualResultClause) {
+      return makeSentence(
+        `if ${lowercaseClauseLead(counterfactualConditionClause)}, ${lowercaseClauseLead(counterfactualResultClause)}`,
+        false,
       );
     }
   }
@@ -4237,7 +4485,9 @@ function buildPlanningInterruptionSentence(tokens: RuleToken[]): string | null {
   );
 }
 
-function buildWeatherForecastContrastSentence(tokens: RuleToken[]): string | null {
+function buildWeatherForecastContrastSentence(
+  tokens: RuleToken[],
+): string | null {
   const clauses = splitClauseSegments(tokens);
   if (
     clauses.length !== 2 ||
@@ -4264,7 +4514,9 @@ function buildWeatherForecastContrastSentence(tokens: RuleToken[]): string | nul
     firstClause.filter((token) => Boolean(TIME_TRANSLATIONS[token.word])),
   ).toLowerCase();
   const untilIndex = secondClause.findIndex((token) => token.word === "直到");
-  const negationIndex = secondClause.findIndex((token) => token.word === "没有");
+  const negationIndex = secondClause.findIndex(
+    (token) => token.word === "没有",
+  );
   const endTimePhrase = normalizeByTimePhrase(
     translateCompactTimePhrase(
       secondClause
@@ -4409,6 +4661,96 @@ function buildLongTimeGapContrastSentence(tokens: RuleToken[]): string | null {
   );
 }
 
+function buildOriginalReadyResultSentence(tokens: RuleToken[]): string | null {
+  const clauses = splitClauseSegments(tokens);
+  if (clauses.length !== 2 || clauses[1][0]?.word !== "结果") {
+    return null;
+  }
+
+  const firstClause = clauses[0];
+  const secondClause = clauses[1].slice(1);
+  if (
+    !firstClause.some((token) => token.word === "本来") ||
+    !firstClause.some((token) => token.word === "准备好") ||
+    !secondClause.some((token) => token.word === "出") ||
+    !secondClause.some((token) => token.word === "问题")
+  ) {
+    return null;
+  }
+
+  const subject = translateNaturalPhrase(firstClause.slice(0, 1), {
+    asObject: false,
+  });
+  if (!subject) {
+    return null;
+  }
+
+  return makeSentence(
+    `${subject} was originally ready, but then a problem came up at the last minute`,
+    false,
+  );
+}
+
+function buildNearMissSentence(tokens: RuleToken[]): string | null {
+  const trimmedTokens = trimClauseTokens(tokens);
+  const markerIndex = trimmedTokens.findIndex((token) => token.word === "差点");
+  if (markerIndex <= 0) {
+    return null;
+  }
+
+  const subject = translateNaturalPhrase(trimmedTokens.slice(0, markerIndex), {
+    asObject: false,
+  });
+  if (!subject) {
+    return null;
+  }
+
+  const actionTokens = trimmedTokens
+    .slice(markerIndex + 1)
+    .filter((token) => token.word !== "就" && token.word !== "了");
+  if (actionTokens.length === 0) {
+    return null;
+  }
+
+  const isNegated =
+    actionTokens[0]?.word === "没" || actionTokens[0]?.word === "不";
+  const bareActionTokens = isNegated ? actionTokens.slice(1) : actionTokens;
+  if (bareActionTokens.length === 0) {
+    return null;
+  }
+
+  if (isNegated) {
+    if (
+      bareActionTokens[0]?.word === "听懂" ||
+      (bareActionTokens[0]?.word === "听" && bareActionTokens[1]?.word === "懂")
+    ) {
+      return makeSentence(`${subject} almost did not understand`, false);
+    }
+
+    const conservativeAction = buildSoftenedVerbPhrase(bareActionTokens);
+    return conservativeAction
+      ? makeSentence(`${subject} almost did not ${conservativeAction}`, false)
+      : null;
+  }
+
+  if (bareActionTokens[0]?.word === "迟到") {
+    return makeSentence(`${subject} was almost late`, false);
+  }
+
+  if (bareActionTokens[0]?.word === "忘") {
+    return makeSentence(`${subject} almost forgot`, false);
+  }
+
+  if (bareActionTokens[0]?.word === "摔倒") {
+    return makeSentence(`${subject} almost fell`, false);
+  }
+
+  const actionPhrase = buildSoftenedVerbPhrase(bareActionTokens);
+  return actionPhrase
+    ? makeSentence(`${subject} almost ${toPastTense(actionPhrase)}`, false)
+    : null;
+}
+
 function buildContrastSentence(tokens: RuleToken[]): string | null {
   const clauses = splitClauseSegments(tokens);
   if (clauses.length !== 2) {
@@ -4420,6 +4762,7 @@ function buildContrastSentence(tokens: RuleToken[]): string | null {
     buildLookTasteContrastSentence(tokens) ||
     buildSocialEatingContrastSentence(tokens) ||
     buildWeatherForecastContrastSentence(tokens) ||
+    buildOriginalReadyResultSentence(tokens) ||
     buildLongTimeGapContrastSentence(tokens);
   if (specializedContrast) {
     return specializedContrast;
@@ -4450,6 +4793,25 @@ function buildContrastSentence(tokens: RuleToken[]): string | null {
     return subject
       ? makeSentence(
           `${subject} originally wanted to go, but later ${buildDidNotEndUpClause(subject, "go")}`,
+          false,
+        )
+      : null;
+  }
+
+  if (
+    firstClause[1]?.word === "本来" &&
+    firstClause[2]?.word === "要" &&
+    firstClause[3]?.word === "来" &&
+    secondClause[0]?.word === "后来" &&
+    secondClause[1]?.word === "改主意"
+  ) {
+    const subject = translateNaturalPhrase(firstClause.slice(0, 1), {
+      asObject: false,
+    });
+    const possessive = subject ? possessiveForSubject(subject) : "";
+    return subject
+      ? makeSentence(
+          `${subject} was going to come, but later ${subject} changed ${possessive} mind`,
           false,
         )
       : null;
@@ -4506,6 +4868,7 @@ function buildTwoClauseTopicConsequence(tokens: RuleToken[]): string | null {
 
 function matchCompatibilityStructuredRule(tokens: RuleToken[]): string | null {
   return (
+    buildNearMissSentence(tokens) ||
     buildAfterThenSequenceSentence(tokens) ||
     buildScheduledMeetingSentence(tokens) ||
     buildConditionalPreparationSentence(tokens) ||

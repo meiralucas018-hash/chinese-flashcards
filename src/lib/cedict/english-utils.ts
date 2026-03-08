@@ -381,6 +381,43 @@ export function buildDidNotEvenByClause(
     : baseClause;
 }
 
+export function buildPastPerfectClause(
+  subject: string,
+  predicate: string,
+  options?: { negative?: boolean; trailingAdverb?: string },
+): string {
+  const normalizedPredicate = predicate.trim();
+  if (!subject.trim() || !normalizedPredicate) {
+    return [subject.trim(), normalizedPredicate].filter(Boolean).join(" ").trim();
+  }
+
+  const core = `${subject} had${options?.negative ? " not" : ""} ${toPastParticiple(normalizedPredicate)}`;
+  const trailingAdverb = options?.trailingAdverb?.trim() || "";
+  return trailingAdverb ? `${core} ${trailingAdverb}` : core;
+}
+
+export function buildModalPerfectClause(
+  subject: string,
+  modal: "would" | "could",
+  predicate: string,
+  options?: { already?: boolean; trailingAdverb?: string; timePhrase?: string },
+): string {
+  const normalizedPredicate = predicate.trim();
+  if (!subject.trim() || !normalizedPredicate) {
+    return [subject.trim(), `${modal} have`, normalizedPredicate]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+  }
+
+  const perfect = `${subject} ${modal} have ${toPastParticiple(normalizedPredicate)}`;
+  const withAlready = options?.already ? `${perfect} already` : perfect;
+  const trailingAdverb = options?.trailingAdverb?.trim() || "";
+  const timed = options?.timePhrase?.trim() || "";
+
+  return [withAlready, trailingAdverb, timed].filter(Boolean).join(" ").trim();
+}
+
 export function normalizeProgressiveEnglish(verbPhrase: string): string {
   const normalized = verbPhrase.trim();
   if (!normalized) {
@@ -419,6 +456,9 @@ export function toPastTense(verbPhrase: string): string {
     send: "sent",
     put: "put",
     get: "got",
+    tell: "told",
+    forget: "forgot",
+    fall: "fell",
   };
 
   let past = irregularPast[firstWord] || "";
@@ -463,6 +503,9 @@ export function toPastParticiple(verbPhrase: string): string {
     find: "found",
     put: "put",
     get: "gotten",
+    tell: "told",
+    forget: "forgotten",
+    fall: "fallen",
   };
 
   const participle = irregularParticiples[firstWord] || toPastTense(firstWord);

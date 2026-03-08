@@ -144,6 +144,8 @@ export const ADVERB_TRANSLATIONS: Record<string, string> = {
   比较: "quite",
   本来: "originally",
   后来: "later",
+  突然: "suddenly",
+  临时: "at the last minute",
 };
 
 export const SUBJECT_CONTINUATION_CLAUSE_STARTERS = new Set([
@@ -314,6 +316,13 @@ export const VERB_TRANSLATIONS: Record<string, string> = {
   等: "wait for",
   告诉: "tell",
   决定: "decide",
+  放弃: "give up",
+  忘: "forget",
+  提醒: "remind",
+  改主意: "change one's mind",
+  摔倒: "fall",
+  迟到: "arrive late",
+  准备好: "be ready",
   开始: "start",
   弄明白: "figure out",
   搬: "move",
