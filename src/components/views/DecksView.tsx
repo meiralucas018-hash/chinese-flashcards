@@ -56,13 +56,13 @@ export default function DecksView({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
+      <div className="mb-4 flex items-center gap-3">
         <h2 className="text-xl font-semibold text-slate-100">Your Decks</h2>
         <Dialog>
           <DialogTrigger asChild>
             <Button
               size="sm"
-              className="bg-blue-500/20 border border-blue-500/40 hover:bg-blue-500/30"
+              className="border border-blue-500/40 bg-blue-500/20 text-slate-100 hover:bg-blue-500/30"
             >
               <Plus className="w-4 h-4 mr-2" />
               New Deck

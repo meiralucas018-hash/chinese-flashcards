@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import {
-  CircleHelp,
   Check,
+  CircleHelp,
   FolderOpen,
   Loader2,
   Pencil,
-  Plus,
   Sparkles,
   Trash2,
   Wand2,
@@ -44,11 +43,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
 
 export interface NewCardFormState {
   front: string;
@@ -73,8 +67,14 @@ interface AddCardViewProps {
   onCreateCard: () => Promise<void>;
   onClearForm: () => void;
   onDeleteCard: (cardId: string) => Promise<void>;
-  onEditCard: (cardId: string, patch: Partial<CardType>) => Promise<void>;
+  onEditCard: (cardId: string, patch: EditableCardPatch) => Promise<void>;
 }
+
+type EditableCardPatch = Pick<
+  CardType,
+  "front" | "pinyin" | "meaning" | "example"
+> &
+  Partial<Pick<CardType, "exampleBreakdown" | "usageExamples">>;
 
 function EditableCardRow({
   card,
@@ -83,7 +83,7 @@ function EditableCardRow({
 }: {
   card: CardType;
   onDelete: (cardId: string) => Promise<void>;
-  onSave: (cardId: string, patch: Partial<CardType>) => Promise<void>;
+  onSave: (cardId: string, patch: EditableCardPatch) => Promise<void>;
 }) {
   const [draftFront, setDraftFront] = useState(card.front);
   const [draftPinyin, setDraftPinyin] = useState(card.pinyin);
@@ -91,26 +91,34 @@ function EditableCardRow({
   const [draftExample, setDraftExample] = useState(card.example);
 
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-3 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-lg text-blue-300 font-semibold">{card.front}</div>
-        <div className="flex gap-2">
+    <div className="space-y-3 rounded-xl border border-white/8 bg-slate-900/55 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <div className="font-chinese-ui text-xl font-semibold text-blue-200">
+            {card.front}
+          </div>
+          <div className="text-sm text-slate-300">
+            {convertPinyinTones(card.pinyin)}
+          </div>
+          <div className="text-sm text-slate-400">{card.meaning}</div>
+        </div>
+        <div className="flex gap-2 self-start">
           <Dialog>
             <DialogTrigger asChild>
               <Button
                 size="sm"
                 variant="outline"
-                className="border-slate-600 hover:bg-slate-700"
+                className="border-slate-600/80 bg-white/[0.03] text-slate-200 hover:bg-white/[0.06]"
               >
-                <Pencil className="w-4 h-4 mr-1" />
+                <Pencil className="mr-1 h-4 w-4" />
                 Edit
               </Button>
             </DialogTrigger>
-            <DialogContent className="bg-slate-900 border-slate-700">
+            <DialogContent className="border-slate-700 bg-slate-900">
               <DialogHeader>
                 <DialogTitle>Edit Card</DialogTitle>
                 <DialogDescription>
-                  Update card fields and save changes locally.
+                  Update the card and save it locally.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-3 py-2">
@@ -119,7 +127,7 @@ function EditableCardRow({
                   <Input
                     value={draftFront}
                     onChange={(event) => setDraftFront(event.target.value)}
-                    className="bg-slate-800 border-slate-600"
+                    className="border-slate-600 bg-slate-800"
                   />
                 </div>
                 <div className="space-y-1">
@@ -127,7 +135,7 @@ function EditableCardRow({
                   <Input
                     value={draftPinyin}
                     onChange={(event) => setDraftPinyin(event.target.value)}
-                    className="bg-slate-800 border-slate-600"
+                    className="border-slate-600 bg-slate-800"
                   />
                 </div>
                 <div className="space-y-1">
@@ -135,7 +143,7 @@ function EditableCardRow({
                   <Input
                     value={draftMeaning}
                     onChange={(event) => setDraftMeaning(event.target.value)}
-                    className="bg-slate-800 border-slate-600"
+                    className="border-slate-600 bg-slate-800"
                   />
                 </div>
                 <div className="space-y-1">
@@ -143,7 +151,7 @@ function EditableCardRow({
                   <Textarea
                     value={draftExample}
                     onChange={(event) => setDraftExample(event.target.value)}
-                    className="bg-slate-800 border-slate-600"
+                    className="border-slate-600 bg-slate-800"
                   />
                 </div>
               </div>
@@ -155,6 +163,8 @@ function EditableCardRow({
                       pinyin: draftPinyin.trim(),
                       meaning: draftMeaning.trim(),
                       example: draftExample.trim(),
+                      exampleBreakdown: card.exampleBreakdown,
+                      usageExamples: card.usageExamples,
                     });
                   }}
                 >
@@ -169,12 +179,12 @@ function EditableCardRow({
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-red-400 hover:bg-red-500/20"
+                className="text-red-400 hover:bg-red-500/15 hover:text-red-200"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="h-4 w-4" />
               </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent className="bg-slate-900 border-slate-700">
+            <AlertDialogContent className="border-slate-700 bg-slate-900">
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete Card?</AlertDialogTitle>
                 <AlertDialogDescription>
@@ -194,38 +204,26 @@ function EditableCardRow({
           </AlertDialog>
         </div>
       </div>
-      <div className="text-sm text-slate-300">
-        {convertPinyinTones(card.pinyin)}
-      </div>
-      <div className="text-sm text-slate-400">{card.meaning}</div>
+      {card.example.trim() && (
+        <div className="rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 text-sm text-slate-400">
+          Example: {card.example}
+        </div>
+      )}
     </div>
   );
-}
-
-function formatTranslationSource(
-  source: "exact" | "rule" | "fallback",
-): string {
-  if (source === "exact") {
-    return "Exact dictionary";
-  }
-  if (source === "rule") {
-    return "Rule-based";
-  }
-
-  return "Literal fallback";
 }
 
 function getTranslationSourceExplanation(
   source: "exact" | "rule" | "fallback",
 ): string {
   if (source === "exact") {
-    return "This sentence matched a direct CEDICT entry, so the app used the dictionary gloss first.";
+    return "A full sentence match was found in the dictionary, so the English comes directly from that entry.";
   }
   if (source === "rule") {
-    return "This sentence was segmented locally and then rewritten with the offline rule pipeline.";
+    return "The app broke the sentence into known words, then rewrote the meaning into more natural English.";
   }
 
-  return "No stronger match was found, so the app kept a more literal gloss from the segmented meanings.";
+  return "No stronger sentence translation was available, so this stays close to the literal word-by-word gloss.";
 }
 
 function shouldShowLiteralGloss(
@@ -262,6 +260,11 @@ export default function AddCardView({
   onDeleteCard,
   onEditCard,
 }: AddCardViewProps) {
+  const [authoringMode, setAuthoringMode] = useState<"word" | "sentence">(
+    "word",
+  );
+  const [showDeckOptions, setShowDeckOptions] = useState(false);
+
   const analysisPreview = useMemo(() => {
     if (!sentenceAnalysis) return null;
     if (!formState.example.trim()) return null;
@@ -269,11 +272,15 @@ export default function AddCardView({
     return sentenceAnalysis;
   }, [sentenceAnalysis, formState.example]);
 
+  const analyzedPinyin = analysisPreview?.pinyin || formState.examplePinyin;
+  const analyzedTranslation =
+    analysisPreview?.translation || formState.exampleTranslation;
+
   if (!currentDeck) {
     return (
-      <Card className="bg-slate-800/30 border-slate-700">
+      <Card className="border-slate-700 bg-slate-800/30">
         <CardContent className="py-12 text-center text-slate-400">
-          <FolderOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
+          <FolderOpen className="mx-auto mb-4 h-12 w-12 opacity-50" />
           <p className="mb-4">Select a deck first to add cards.</p>
           <Button onClick={onGoDecks}>Go to Decks</Button>
         </CardContent>
@@ -283,199 +290,183 @@ export default function AddCardView({
 
   return (
     <div className="space-y-6">
-      <Card className="bg-gradient-to-b from-white/5 to-transparent border-slate-700">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Plus className="w-5 h-5" />
-            Add Card to {currentDeck.name}
-          </CardTitle>
-          <CardDescription>
-            Add a card with sentence-aware breakdown data.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="charInput">Chinese Character(s) *</Label>
-              <Input
-                id="charInput"
-                value={formState.front}
-                onChange={(event) =>
-                  onFormChange({ front: event.target.value })
-                }
-                placeholder="你好"
-                className="bg-slate-800 border-slate-600 text-2xl"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="pinyinInput">Pinyin (tone numbers)</Label>
-              <Input
-                id="pinyinInput"
-                value={formState.pinyin}
-                onChange={(event) =>
-                  onFormChange({ pinyin: event.target.value })
-                }
-                placeholder="ni3 hao3"
-                className="bg-slate-800 border-slate-600"
-              />
-              {formState.pinyin && (
-                <p className="text-sm text-blue-400">
-                  {convertPinyinTones(formState.pinyin)}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void onAutoFetch()}
-              disabled={isAutoFetching || !formState.front.trim()}
-              className="bg-purple-500/10 border-purple-500/30 text-purple-400 hover:bg-purple-500/20"
-            >
-              {isAutoFetching ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Sparkles className="w-4 h-4 mr-2" />
-              )}
-              Auto-fill from CEDICT
-            </Button>
-            <span className="text-xs text-slate-500">
-              Best for single characters and exact words
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="meaningInput">Meaning *</Label>
-            <Input
-              id="meaningInput"
-              value={formState.meaning}
-              onChange={(event) =>
-                onFormChange({ meaning: event.target.value })
-              }
-              placeholder="Hello, Hi"
-              className="bg-slate-800 border-slate-600"
-            />
-          </div>
-
-          <div className="border-t border-slate-700 pt-4 mt-4 space-y-3">
-            <h4 className="text-sm font-medium text-slate-300">
-              Example Sentence (optional)
-            </h4>
-            <div className="space-y-2">
-              <Label htmlFor="exampleInput">Example</Label>
-              <Textarea
-                id="exampleInput"
-                value={formState.example}
-                onChange={(event) =>
-                  onFormChange({ example: event.target.value })
-                }
-                placeholder="你好吗？"
-                className="bg-slate-800 border-slate-600"
-                rows={2}
-              />
-            </div>
-
-            <div className="flex items-center gap-2 pt-1 pb-3 border-b border-slate-600">
-              <Button
-                variant="outline"
-                onClick={() => void onAnalyzeSentence()}
-                disabled={isAnalyzingSentence || !formState.example.trim()}
-                className="bg-blue-500/20 border-blue-500/50 text-blue-300 hover:bg-blue-500/30"
+      <Card className="border-slate-700/80 bg-gradient-to-b from-white/5 via-slate-900/70 to-slate-900/45 shadow-[0_18px_50px_rgba(0,0,0,0.24)]">
+        <CardHeader className="space-y-4 pb-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <CardTitle className="text-xl text-slate-50 md:text-2xl">
+              {currentDeck.name}
+            </CardTitle>
+            <div className="space-y-2 self-start">
+              <button
+                type="button"
+                onClick={() => setShowDeckOptions((prev) => !prev)}
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
               >
-                {isAnalyzingSentence ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Wand2 className="w-4 h-4 mr-2" />
-                )}
-                Analyze Sentence Structure
-              </Button>
-              <span className="text-xs text-slate-400">
-                Word-level segmentation with character fallback
-              </span>
+                Deck
+                <span className="text-slate-100">{currentDeck.name}</span>
+              </button>
+              {showDeckOptions && (
+                <div className="flex gap-2 rounded-2xl border border-white/10 bg-slate-950/85 p-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setAuthoringMode("word")}
+                    className={`rounded-xl px-3 py-2 text-sm transition-colors ${
+                      authoringMode === "word"
+                        ? "bg-blue-500 text-slate-950"
+                        : "text-slate-300 hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    Single Word
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAuthoringMode("sentence")}
+                    className={`rounded-xl px-3 py-2 text-sm transition-colors ${
+                      authoringMode === "sentence"
+                        ? "bg-blue-500 text-slate-950"
+                        : "text-slate-300 hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    Sentence
+                  </button>
+                </div>
+              )}
             </div>
+          </div>
+        </CardHeader>
 
-            {analysisPreview && (
-              <div className="mt-2 p-3 bg-slate-800/50 border border-blue-500/30 rounded-lg">
-                <p className="text-xs text-slate-400 mb-2">Analysis preview</p>
-                <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                  <span className="rounded-full border border-blue-400/30 bg-blue-500/10 px-2 py-1 text-blue-200">
-                    {formatTranslationSource(analysisPreview.translationSource)}
-                  </span>
-                  <HoverCard>
-                    <HoverCardTrigger asChild>
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded-full border border-slate-600/70 bg-slate-900/70 px-2 py-1 text-slate-300 transition-colors hover:border-slate-500 hover:text-white"
-                      >
-                        <CircleHelp className="h-3.5 w-3.5" />
-                        Why this?
-                      </button>
-                    </HoverCardTrigger>
-                    <HoverCardContent className="w-72 border-slate-700 bg-slate-950 text-slate-200">
-                      <p className="text-sm leading-6">
-                        {getTranslationSourceExplanation(
-                          analysisPreview.translationSource,
-                        )}
-                      </p>
-                    </HoverCardContent>
-                  </HoverCard>
-                  {typeof analysisPreview.confidence === "number" && (
-                    <span className="text-slate-400">
-                      Confidence {Math.round(analysisPreview.confidence * 100)}%
-                    </span>
+        <CardContent className="space-y-6 md:space-y-7">
+          {authoringMode === "word" && (
+            <section className="space-y-5 rounded-2xl border border-white/8 bg-slate-950/35 p-4 md:p-5">
+              <h3 className="text-base font-semibold text-slate-100">
+                Single Character
+              </h3>
+
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+                <div className="space-y-2.5">
+                  <Label htmlFor="charInput" className="text-sm text-slate-200">
+                    Chinese Word
+                  </Label>
+                  <Input
+                    id="charInput"
+                    value={formState.front}
+                    onChange={(event) =>
+                      onFormChange({ front: event.target.value })
+                    }
+                    placeholder="你好"
+                    className="h-13 border-slate-600/80 bg-slate-900/80 text-2xl text-slate-50 shadow-inner shadow-black/20 focus-visible:border-blue-400/60"
+                  />
+                </div>
+
+                <div className="space-y-2.5">
+                  <Label htmlFor="pinyinInput" className="text-sm text-slate-200">
+                    Pinying
+                  </Label>
+                  <Input
+                    id="pinyinInput"
+                    value={formState.pinyin}
+                    onChange={(event) =>
+                      onFormChange({ pinyin: event.target.value })
+                    }
+                    placeholder="ni3 hao3"
+                    className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
+                  />
+                  {formState.pinyin && (
+                    <div className="text-sm text-blue-200">
+                      {convertPinyinTones(formState.pinyin)}
+                    </div>
                   )}
                 </div>
-                <CharacterBreakdown
-                  segments={analysisPreview.segments}
-                  pinyin={analysisPreview.pinyin || formState.examplePinyin}
-                  translation={
-                    analysisPreview.translation || formState.exampleTranslation
-                  }
-                  literalGloss={analysisPreview.literalGloss}
-                />
-                {shouldShowLiteralGloss(
-                  analysisPreview.translation,
-                  analysisPreview.literalGloss,
-                ) && (
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <div className="rounded-lg border border-slate-700/80 bg-slate-900/60 p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">
-                        Translation
-                      </p>
-                      <p className="mt-1 text-sm text-slate-200">
-                        {analysisPreview.translation}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-slate-700/80 bg-slate-900/60 p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">
-                        Literal Gloss
-                      </p>
-                      <p className="mt-1 text-sm text-slate-300">
-                        {analysisPreview.literalGloss || "-"}
-                      </p>
-                    </div>
-                  </div>
-                )}
               </div>
-            )}
 
-            <div className="grid gap-4 md:grid-cols-2 pt-1">
-              <div className="space-y-2">
-                <Label htmlFor="examplePinyin">Example Pinyin</Label>
+              <div className="space-y-2.5">
+                <Label htmlFor="meaningInput" className="text-sm text-slate-200">
+                  Meaning
+                </Label>
                 <Input
-                  id="examplePinyin"
-                  value={formState.examplePinyin}
+                  id="meaningInput"
+                  value={formState.meaning}
                   onChange={(event) =>
-                    onFormChange({ examplePinyin: event.target.value })
+                    onFormChange({ meaning: event.target.value })
                   }
-                  placeholder="ni3 hao3 ma5"
-                  className="bg-slate-800 border-slate-600"
+                  placeholder="Hello, hi"
+                  className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="exampleTranslation">Translation</Label>
+
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void onAutoFetch()}
+                  disabled={isAutoFetching || !formState.front.trim()}
+                  className="border-purple-400/25 bg-purple-500/8 text-purple-200 hover:bg-purple-500/15 focus-visible:border-purple-300/60"
+                >
+                  {isAutoFetching ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-2 h-4 w-4" />
+                  )}
+                  Auto-fill
+                </Button>
+              </div>
+            </section>
+          )}
+
+          {authoringMode === "sentence" && (
+            <section className="space-y-5 rounded-2xl border border-white/8 bg-slate-950/35 p-4 md:p-5">
+              <h3 className="text-base font-semibold text-slate-100">
+                Chinese Sentence
+              </h3>
+
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+                <div className="space-y-2.5">
+                  <Label htmlFor="exampleInput" className="text-sm text-slate-200">
+                    Chinese Sentence
+                  </Label>
+                  <Textarea
+                    id="exampleInput"
+                    value={formState.example}
+                    onChange={(event) =>
+                      onFormChange({ example: event.target.value })
+                    }
+                    placeholder="你好吗？"
+                    className="min-h-24 border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
+                    rows={3}
+                  />
+                </div>
+
+                <div className="space-y-2.5">
+                  <Label
+                    htmlFor="examplePinyin"
+                    className="text-sm text-slate-200"
+                  >
+                    Pinyin
+                  </Label>
+                  <Input
+                    id="examplePinyin"
+                    value={formState.examplePinyin}
+                    onChange={(event) =>
+                      onFormChange({ examplePinyin: event.target.value })
+                    }
+                    placeholder="ni3 hao3 ma5"
+                    className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
+                  />
+                  {formState.examplePinyin && (
+                    <div className="text-sm text-blue-200">
+                      {convertPinyinTones(formState.examplePinyin)}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <Label
+                  htmlFor="exampleTranslation"
+                  className="text-sm text-slate-200"
+                >
+                  Meaning
+                </Label>
                 <Input
                   id="exampleTranslation"
                   value={formState.exampleTranslation}
@@ -483,36 +474,146 @@ export default function AddCardView({
                     onFormChange({ exampleTranslation: event.target.value })
                   }
                   placeholder="How are you?"
-                  className="bg-slate-800 border-slate-600"
+                  className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
                 />
               </div>
-            </div>
-          </div>
 
-          <div className="flex gap-2 pt-2">
-            <Button onClick={() => void onCreateCard()} className="flex-1">
-              <Check className="w-4 h-4 mr-2" />
-              Add Card
-            </Button>
-            <Button variant="outline" onClick={onClearForm}>
-              Clear
-            </Button>
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void onAnalyzeSentence()}
+                  disabled={isAnalyzingSentence || !formState.example.trim()}
+                  className="border-blue-400/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/18 focus-visible:border-blue-300/60"
+                >
+                  {isAnalyzingSentence ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="mr-2 h-4 w-4" />
+                  )}
+                  Analyze
+                </Button>
+              </div>
+
+              {analysisPreview && (
+                <div className="space-y-4 rounded-2xl border border-white/10 bg-slate-950/75 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.25)] md:p-5">
+                  <div className="space-y-3">
+                    <p className="font-chinese-ui text-3xl font-semibold tracking-tight text-white md:text-4xl">
+                      {analysisPreview.sentence}
+                    </p>
+                    <p className="text-sm leading-6 text-blue-100/75 md:text-base">
+                      {convertPinyinTones(analyzedPinyin)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-blue-400/15 bg-blue-500/8 p-4">
+                    <p className="text-base leading-7 text-slate-50 md:text-lg">
+                      {analyzedTranslation}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm font-medium text-slate-200">
+                        Interactive sentence map
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Tap a character or word to inspect the local breakdown.
+                      </p>
+                    </div>
+                    <CharacterBreakdown
+                      segments={analysisPreview.segments}
+                      pinyin={analyzedPinyin}
+                      translation={analyzedTranslation}
+                      literalGloss={analysisPreview.literalGloss}
+                      variant="compact"
+                      showPinyinLine={false}
+                      showTranslationLine={false}
+                      showLiteralGlossLine={false}
+                    />
+                  </div>
+
+                  <details className="rounded-2xl border border-white/8 bg-white/[0.03]">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-slate-200 [&::-webkit-details-marker]:hidden">
+                      <span className="inline-flex items-center gap-2">
+                        <CircleHelp className="h-4 w-4 text-slate-400" />
+                        Why this translation?
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        Literal gloss and notes
+                      </span>
+                    </summary>
+                    <div className="space-y-3 border-t border-white/8 px-4 py-4 text-sm leading-6 text-slate-300">
+                      <p>
+                        {getTranslationSourceExplanation(
+                          analysisPreview.translationSource,
+                        )}
+                      </p>
+                      {shouldShowLiteralGloss(
+                        analysisPreview.translation,
+                        analysisPreview.literalGloss,
+                      ) ? (
+                        <div className="rounded-xl border border-white/8 bg-slate-900/60 p-3">
+                          <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-slate-500">
+                            Literal gloss
+                          </p>
+                          <p className="mt-2 text-slate-300">
+                            {analysisPreview.literalGloss || "-"}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  </details>
+                </div>
+              )}
+
+              {!analysisPreview && formState.example.trim() && (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/35 p-4 text-sm leading-6 text-slate-400">
+                  Analyze to preview the sentence and segment map.
+                </div>
+              )}
+            </section>
+          )}
+
+          <div className="flex flex-col-reverse gap-3 border-t border-white/8 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs leading-5 text-slate-500">
+              Clear resets this form.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                variant="outline"
+                onClick={onClearForm}
+                className="border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
+              >
+                Clear form
+              </Button>
+              <Button
+                onClick={() => void onCreateCard()}
+                size="lg"
+                className="min-w-[180px] bg-blue-500 text-slate-950 shadow-[0_10px_30px_rgba(96,165,250,0.28)] hover:bg-blue-400"
+              >
+                <Check className="mr-2 h-4 w-4" />
+                Add Card
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="bg-gradient-to-b from-white/5 to-transparent border-slate-700">
+      <Card className="border-slate-700/70 bg-gradient-to-b from-white/5 to-transparent">
         <CardHeader>
-          <CardTitle>Deck Cards</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-slate-100">Deck Cards</CardTitle>
+          <CardDescription className="text-slate-400">
             View, edit, and delete cards in {currentDeck.name}.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {cardsInDeck.length === 0 ? (
-            <p className="text-sm text-slate-400">No cards in this deck yet.</p>
+            <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/35 p-5 text-sm text-slate-400">
+              No cards in this deck yet. Add your first card above to start building a study set.
+            </div>
           ) : (
-            <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+            <div className="max-h-[360px] space-y-3 overflow-y-auto pr-1">
               {cardsInDeck.map((card) => (
                 <EditableCardRow
                   key={card.id}

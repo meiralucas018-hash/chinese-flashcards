@@ -15,6 +15,10 @@ interface CharacterBreakdownProps {
   pinyin?: string;
   translation?: string;
   literalGloss?: string;
+  variant?: "default" | "compact";
+  showPinyinLine?: boolean;
+  showTranslationLine?: boolean;
+  showLiteralGlossLine?: boolean;
   onCharClick?: (char: string) => void;
   onWordClick?: (word: string) => void;
 }
@@ -24,9 +28,15 @@ export default function CharacterBreakdown({
   pinyin,
   translation,
   literalGloss,
+  variant = "default",
+  showPinyinLine = true,
+  showTranslationLine = true,
+  showLiteralGlossLine = true,
   onCharClick,
   onWordClick,
 }: CharacterBreakdownProps) {
+  const isCompact = variant === "compact";
+
   const handleCharClick = (e: React.MouseEvent, char: string) => {
     e.stopPropagation();
     onCharClick?.(char);
@@ -38,9 +48,21 @@ export default function CharacterBreakdown({
   };
 
   return (
-    <div className="space-y-2">
-      <div className="sentence-wrap bg-white/5 border border-white/10 rounded-lg p-4 transition-all hover:border-blue-500/30 hover:bg-white/10">
-        <div className="sentence-box text-xl md:text-2xl leading-relaxed text-slate-100 break-keep select-none">
+    <div className={isCompact ? "space-y-3" : "space-y-2"}>
+      <div
+        className={`sentence-wrap ${
+          isCompact
+            ? "rounded-xl border border-white/8 bg-slate-950/70 p-3 md:p-4 hover:border-blue-400/20 hover:bg-slate-950/80 hover:translate-y-0"
+            : "bg-white/5 border border-white/10 rounded-lg p-4 transition-all hover:border-blue-500/30 hover:bg-white/10"
+        }`}
+      >
+        <div
+          className={`sentence-box break-keep select-none leading-relaxed ${
+            isCompact
+              ? "text-lg text-slate-50 md:text-xl"
+              : "text-xl text-slate-100 md:text-2xl"
+          }`}
+        >
           <TooltipProvider>
             {segments.map((segment, segIndex) => {
               const word =
@@ -53,14 +75,20 @@ export default function CharacterBreakdown({
               return (
                 <span
                   key={`${word}-${segIndex}`}
-                  className={`relative inline-flex items-end mr-0.5 rounded px-0.5 ${segment.isWord ? "pb-1" : "hover:bg-blue-500/10"}`}
+                  className={`relative mr-0.5 inline-flex items-end rounded px-0.5 ${
+                    segment.isWord ? "pb-1" : "hover:bg-blue-500/10"
+                  }`}
                 >
                   <span className="inline-flex gap-0.5 rounded text-left">
                     {segment.chars.map((charInfo, charIndex) => (
                       <Tooltip key={`${word}-${charInfo.char}-${charIndex}`}>
                         <TooltipTrigger asChild>
                           <span
-                            className="rounded px-0.5 cursor-pointer transition-colors hover:bg-blue-500/20 hover:text-blue-300"
+                            className={`cursor-pointer rounded px-0.5 transition-colors ${
+                              isCompact
+                                ? "hover:bg-blue-500/15 hover:text-blue-200"
+                                : "hover:bg-blue-500/20 hover:text-blue-300"
+                            }`}
                             onClick={(event) =>
                               handleCharClick(event, charInfo.char)
                             }
@@ -120,20 +148,26 @@ export default function CharacterBreakdown({
         </div>
       </div>
 
-      {pinyin && (
-        <div className="pinyin-line text-blue-300 font-sans text-base mt-3 leading-relaxed tracking-wide">
+      {showPinyinLine && pinyin && (
+        <div
+          className={`pinyin-line font-sans leading-relaxed tracking-wide ${
+            isCompact
+              ? "mt-2 text-sm text-slate-300"
+              : "mt-3 text-base text-blue-300"
+          }`}
+        >
           {convertPinyinTones(pinyin)}
         </div>
       )}
 
-      {translation && (
-        <div className="translation-line text-slate-400 italic text-sm mt-1">
+      {showTranslationLine && translation && (
+        <div className="translation-line mt-1 text-sm italic text-slate-400">
           {translation}
         </div>
       )}
 
-      {literalGloss && (
-        <div className="text-xs text-slate-500 mt-1">
+      {showLiteralGlossLine && literalGloss && (
+        <div className="mt-1 text-xs text-slate-500">
           Literal: {literalGloss}
         </div>
       )}
