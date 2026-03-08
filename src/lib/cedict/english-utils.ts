@@ -299,6 +299,7 @@ export function toPastTense(verbPhrase: string): string {
     do: "did",
     have: "had",
     sleep: "slept",
+    give: "gave",
   };
 
   let past = irregularPast[firstWord] || "";
@@ -372,6 +373,10 @@ export function addSimpleArticle(subject: string, predicate: string): string {
     "doctor",
     "friend",
     "person",
+    "book",
+    "photo",
+    "letter",
+    "door",
     "worker",
     "engineer",
     "manager",

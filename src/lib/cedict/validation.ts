@@ -43,13 +43,22 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
     sentence: "你为什么学中文？",
     expectedTranslationIncludes: ["why", "study"],
   },
-  { sentence: "你给谁打电话？", expectedTranslationIncludes: ["who", "call"] },
+  {
+    sentence: "你给谁打电话？",
+    expectedTranslationIncludes: ["who", "call", "phone"],
+    expectedTranslationExcludes: ["for who", "give"],
+  },
   { sentence: "我在吃饭。", expectedTranslationIncludes: ["i am", "eating"] },
   { sentence: "我们比他们忙。", expectedTranslationIncludes: ["more", "than"] },
   { sentence: "不要说话。", expectedTranslationIncludes: ["do not", "speak"] },
   { sentence: "我找不到。", expectedTranslationIncludes: ["cannot find"] },
   { sentence: "我听得见。", expectedTranslationIncludes: ["can hear"] },
-  { sentence: "他给我写信。", expectedTranslationIncludes: ["for me"] },
+  {
+    sentence: "他给我写信。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["he", "write", "me", "letter"],
+    expectedTranslationExcludes: ["for me write", "give me write", "to me"],
+  },
   { sentence: "她很高兴。", expectedTranslationIncludes: ["happy"] },
   { sentence: "我没有时间。", expectedTranslationIncludes: ["have", "time"] },
   {
@@ -115,6 +124,42 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
       "measure word",
       "three is book",
     ],
+  },
+  {
+    sentence: "我给你一本书",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["give", "you", "book"],
+    expectedTranslationExcludes: ["give you book", "give to you", "classifier"],
+  },
+  {
+    sentence: "他给我做饭",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["cook", "for me"],
+    expectedTranslationExcludes: ["give", "prepare a meal to", "for me cook"],
+  },
+  {
+    sentence: "他被老师批评了",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["was", "criticized", "teacher"],
+    expectedTranslationExcludes: ["quilt", "to criticize", "by teacher criticize"],
+  },
+  {
+    sentence: "我被他骗了",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["was", "deceived", "him"],
+    expectedTranslationExcludes: ["quilt", "cheat", "by him cheat"],
+  },
+  {
+    sentence: "门被打开了",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["door", "was", "opened"],
+    expectedTranslationExcludes: ["quilt", "gate is", "to open"],
+  },
+  {
+    sentence: "他被公司开除了",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["was", "fired", "company"],
+    expectedTranslationExcludes: ["quilt", "expel", "by company fire"],
   },
 ];
 

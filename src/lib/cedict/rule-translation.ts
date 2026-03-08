@@ -10,6 +10,7 @@ import {
   MODAL_TRANSLATIONS,
   NOUN_TRANSLATIONS,
   NUMBER_TRANSLATIONS,
+  OBJECT_TRANSLATIONS,
   POSSESSIVE_TRANSLATIONS,
   QUESTION_WORD_TRANSLATIONS,
   RESULTATIVE_VERB_TRANSLATIONS,
@@ -64,6 +65,69 @@ type RuleContext = {
 };
 
 type RuleMatcher = (context: RuleContext) => string | null;
+
+type ActionHint = {
+  verb: string;
+  defaultObject?: string;
+  preferIndirectObject?: boolean;
+  benefactive?: boolean;
+  recipientVerb?: string;
+  passiveParticiple?: string;
+  tailObject?: string;
+};
+
+type ActionCore = {
+  sourceWord: string;
+  verb: string;
+  defaultObject?: string;
+  preferIndirectObject: boolean;
+  benefactive: boolean;
+  recipientVerb?: string;
+  passiveParticiple?: string;
+  tailObject?: string;
+  objectTokens: RuleToken[];
+  isPast: boolean;
+  isExperienced: boolean;
+  isOngoing: boolean;
+};
+
+type TransferStructure = {
+  recipient: string;
+  patient: string;
+  verb: string;
+  tailObject: string;
+  useIndirectObject: boolean;
+  benefactive: boolean;
+  isPast: boolean;
+  isExperienced: boolean;
+  isOngoing: boolean;
+};
+
+type PassiveStructure = {
+  agent?: string;
+  verbPhrase: string;
+  passiveParticiple?: string;
+  isPast: boolean;
+  isExperienced: boolean;
+};
+
+const ACTION_HINTS: Record<string, ActionHint> = {
+  给: { verb: "give", preferIndirectObject: true },
+  送: { verb: "send", preferIndirectObject: true },
+  带: { verb: "bring", preferIndirectObject: true },
+  打电话: { verb: "call", tailObject: "on the phone" },
+  写信: {
+    verb: "write",
+    defaultObject: "a letter",
+    preferIndirectObject: true,
+  },
+  做饭: { verb: "cook", benefactive: true },
+  看: { verb: "see", recipientVerb: "show", preferIndirectObject: true },
+  批评: { verb: "criticize", passiveParticiple: "criticized" },
+  骗: { verb: "deceive", passiveParticiple: "deceived" },
+  打开: { verb: "open", passiveParticiple: "opened" },
+  开除: { verb: "fire", passiveParticiple: "fired" },
+};
 
 const PREDICATE_MARKERS = new Set<string>([
   "是",
@@ -601,6 +665,236 @@ function normalizeVerbObjectPhrase(verb: string, objectPhrase: string): string {
   return `${verb} ${normalizedObject}`;
 }
 
+function isAspectMarker(word: string): boolean {
+  return word === "了" || word === "过" || word === "着";
+}
+
+function normalizeArgumentRolePhrase(tokens: RuleToken[]): string {
+  const directObject = stripClassifierGloss(translatePhrase(tokens, true))
+    .replace(/\s+/g, " ")
+    .trim();
+  if (directObject) {
+    return directObject;
+  }
+
+  const naturalPhrase = stripClassifierGloss(
+    translateNaturalPhrase(tokens, { asObject: true }),
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (naturalPhrase && OBJECT_TRANSLATIONS[tokens[0]?.word || ""]) {
+    return OBJECT_TRANSLATIONS[tokens[0].word];
+  }
+
+  return naturalPhrase;
+}
+
+function addDefiniteArticleIfNeeded(phrase: string): string {
+  const normalized = phrase.trim();
+  if (!normalized) {
+    return normalized;
+  }
+
+  if (
+    /^(i|you|he|she|it|we|they|me|him|her|us|them|who|this|that|these|those|a|an|the|my|your|his|her|its|our|their)\b/i.test(
+      normalized,
+    )
+  ) {
+    return normalized;
+  }
+
+  return `the ${normalized}`;
+}
+
+function extractActionCore(tokens: RuleToken[]): ActionCore | null {
+  if (tokens.length === 0) {
+    return null;
+  }
+
+  const combinedWord = `${tokens[0].word}${tokens[1]?.word || ""}`;
+  const usesCombinedWord = Boolean(RESULTATIVE_VERB_TRANSLATIONS[combinedWord]);
+  const sourceWord = usesCombinedWord ? combinedWord : tokens[0].word;
+  const hint = ACTION_HINTS[sourceWord] || ACTION_HINTS[tokens[0].word];
+  const verb =
+    hint?.verb ||
+    RESULTATIVE_VERB_TRANSLATIONS[combinedWord] ||
+    VERB_TRANSLATIONS[tokens[0].word] ||
+    cleanLexicalMeaning(tokens[0].meaning);
+
+  if (!verb) {
+    return null;
+  }
+
+  const consumedCount = usesCombinedWord ? 2 : 1;
+  const objectTokens = tokens.filter(
+    (token, index) => index >= consumedCount && !isAspectMarker(token.word),
+  );
+  const aspectMarkers = new Set(tokens.map((token) => token.word));
+
+  return {
+    sourceWord,
+    verb,
+    defaultObject: hint?.defaultObject,
+    preferIndirectObject: Boolean(hint?.preferIndirectObject),
+    benefactive: Boolean(hint?.benefactive),
+    recipientVerb: hint?.recipientVerb,
+    passiveParticiple: hint?.passiveParticiple,
+    tailObject: hint?.tailObject,
+    objectTokens,
+    isPast: aspectMarkers.has("了"),
+    isExperienced: aspectMarkers.has("过"),
+    isOngoing: aspectMarkers.has("着"),
+  };
+}
+
+function detectTransferStructure(
+  tokens: RuleToken[],
+  options?: { patientTokens?: RuleToken[] },
+): TransferStructure | null {
+  if (tokens.length === 0) {
+    return null;
+  }
+
+  const actionIndex = findFirstVerbIndex(tokens);
+  if (actionIndex === -1) {
+    const recipient = normalizeArgumentRolePhrase(tokens.slice(0, 1));
+    const patient = translateNaturalPhrase(
+      options?.patientTokens || tokens.slice(1),
+      { asObject: true },
+    );
+    if (!recipient || !patient) {
+      return null;
+    }
+
+    return {
+      recipient,
+      patient,
+      verb: "give",
+      tailObject: "",
+      useIndirectObject: true,
+      benefactive: false,
+      isPast: tokens.some((token) => token.word === "了"),
+      isExperienced: tokens.some((token) => token.word === "过"),
+      isOngoing: tokens.some((token) => token.word === "着"),
+    };
+  }
+
+  if (actionIndex <= 0) {
+    return null;
+  }
+
+  const recipient = normalizeArgumentRolePhrase(tokens.slice(0, actionIndex));
+  const action = extractActionCore(tokens.slice(actionIndex));
+  if (!recipient || !action) {
+    return null;
+  }
+
+  let patient = translateNaturalPhrase(
+    options?.patientTokens || action.objectTokens,
+    { asObject: true },
+  );
+  if (!patient && action.defaultObject) {
+    patient = action.defaultObject;
+  }
+
+  const verb = action.recipientVerb && patient ? action.recipientVerb : action.verb;
+  const useIndirectObject =
+    !action.benefactive &&
+    patient.length > 0 &&
+    (action.preferIndirectObject ||
+      verb === "give" ||
+      verb === "show" ||
+      verb === "write");
+
+  return {
+    recipient,
+    patient,
+    verb,
+    tailObject: action.tailObject || "",
+    useIndirectObject,
+    benefactive: action.benefactive,
+    isPast: action.isPast,
+    isExperienced: action.isExperienced,
+    isOngoing: action.isOngoing,
+  };
+}
+
+function detectPassiveStructure(tokens: RuleToken[]): PassiveStructure | null {
+  if (tokens.length === 0) {
+    return null;
+  }
+
+  const actionIndex = findFirstVerbIndex(tokens);
+  if (actionIndex === -1) {
+    return null;
+  }
+
+  const agent =
+    actionIndex > 0
+      ? normalizeArgumentRolePhrase(tokens.slice(0, actionIndex))
+      : "";
+  const action = extractActionCore(tokens.slice(actionIndex));
+  if (!action) {
+    return null;
+  }
+
+  const objectPhrase = translateNaturalPhrase(action.objectTokens, {
+    asObject: true,
+  });
+
+  return {
+    agent: agent || undefined,
+    verbPhrase: normalizeVerbObjectPhrase(action.verb, objectPhrase),
+    passiveParticiple: action.passiveParticiple,
+    isPast: action.isPast,
+    isExperienced: action.isExperienced,
+  };
+}
+
+function buildTransferSentence(subject: string, structure: TransferStructure): string {
+  const finiteVerb = structure.isPast
+    ? toPastTense(structure.verb)
+    : conjugateVerb(subject, structure.verb);
+  const patient = structure.patient
+    ? addSimpleArticle(subject, structure.patient)
+    : "";
+
+  if (structure.benefactive) {
+    const tail = [patient, `for ${structure.recipient}`]
+      .filter(Boolean)
+      .join(" ");
+    return makeSentence(
+      `${subject} ${finiteVerb} ${tail}`.trim(),
+      false,
+    );
+  }
+
+  if (structure.verb === "call") {
+    return makeSentence(
+      `${subject} ${finiteVerb} ${structure.recipient} ${structure.tailObject}`.trim(),
+      false,
+    );
+  }
+
+  if (structure.useIndirectObject && structure.patient) {
+    return makeSentence(
+      `${subject} ${finiteVerb} ${structure.recipient} ${patient}`.trim(),
+      false,
+    );
+  }
+
+  const directObject = [patient, structure.tailObject]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return makeSentence(
+    `${subject} ${finiteVerb} ${directObject} to ${structure.recipient}`.trim(),
+    false,
+  );
+}
+
 function translateVerbPhrase(tokens: RuleToken[]): TranslatedPhrase {
   if (tokens.length === 0) {
     return {
@@ -908,22 +1202,27 @@ function buildComplementSentence(
   return null;
 }
 
-function buildPassiveSentence(
-  subject: string,
-  agent: string,
-  verbPhrase: string,
-  isPast: boolean,
-): string {
-  const participle = toPastParticiple(verbPhrase);
+function buildPassiveSentence(subject: string, structure: PassiveStructure): string {
+  const participle =
+    structure.passiveParticiple || toPastParticiple(structure.verbPhrase);
   const passiveAuxiliary =
-    isPast && DYNAMIC_PASSIVE_PARTICIPLES.has(participle)
-      ? "got"
-      : isPast
-        ? wasWereForm(subject)
-        : beForm(subject);
+    structure.isPast || structure.isExperienced
+      ? wasWereForm(subject)
+      : beForm(subject);
+  const realizedSubject = addDefiniteArticleIfNeeded(subject);
+  const realizedAgent = structure.agent
+    ? addDefiniteArticleIfNeeded(structure.agent)
+    : "";
 
   return makeSentence(
-    `${subject} ${passiveAuxiliary} ${participle} by ${agent}`.trim(),
+    [
+      realizedSubject,
+      passiveAuxiliary,
+      participle,
+      realizedAgent ? `by ${realizedAgent}` : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
     false,
   );
 }
@@ -936,7 +1235,7 @@ function buildGiveSentence(
 ): string {
   const verb = isPast ? "gave" : conjugateVerb(subject, "give");
   return makeSentence(
-    `${subject} ${verb} ${addSimpleArticle(subject, objectPhrase)} to ${recipient}`.trim(),
+    `${subject} ${verb} ${recipient} ${addSimpleArticle(subject, objectPhrase)}`.trim(),
     false,
   );
 }
@@ -1419,58 +1718,14 @@ function matchBaRule(context: RuleContext): string | null {
 
   const giveIndex = context.tail.findIndex((token) => token.word === "给");
   if (giveIndex > 0) {
-    const recipientActionIndex = findFirstVerbIndex(
-      context.tail.slice(giveIndex + 1),
-    );
-    if (recipientActionIndex > 0) {
-      const objectPhrase = translatePhrase(
-        context.tail.slice(0, giveIndex),
-        true,
+    const transfer = detectTransferStructure(context.tail.slice(giveIndex + 1), {
+      patientTokens: context.tail.slice(0, giveIndex),
+    });
+    if (transfer) {
+      return withSentenceContext(
+        buildTransferSentence(context.subject, transfer),
+        context.timePhrase,
       );
-      const recipient = translatePhrase(
-        context.tail.slice(giveIndex + 1, giveIndex + 1 + recipientActionIndex),
-        true,
-      );
-      const actionTokens = context.tail.slice(
-        giveIndex + 1 + recipientActionIndex,
-      );
-      const resultativeKey = `${actionTokens[0]?.word || ""}${actionTokens[1]?.word || ""}`;
-      const actionWord =
-        RESULTATIVE_VERB_TRANSLATIONS[resultativeKey] ||
-        VERB_TRANSLATIONS[actionTokens[0]?.word || ""];
-      const actionOffset = RESULTATIVE_VERB_TRANSLATIONS[resultativeKey]
-        ? 2
-        : 1;
-      const actionPhrase = translateVerbPhrase(
-        actionTokens.slice(actionOffset),
-      );
-
-      if (objectPhrase && recipient && actionWord) {
-        const sentence =
-          actionWord === "give"
-            ? buildGiveSentence(
-                context.subject,
-                recipient,
-                objectPhrase,
-                actionTokens.some((token) => token.word === "了"),
-              )
-            : buildVerbSentence(
-                context.subject,
-                actionWord,
-                [objectPhrase, actionPhrase.text, `to ${recipient}`]
-                  .filter(Boolean)
-                  .join(" "),
-                false,
-                false,
-                false,
-                actionPhrase.isPast ||
-                  actionTokens.some((token) => token.word === "了"),
-                actionPhrase.isExperienced,
-                actionPhrase.isOngoing,
-              );
-
-        return withSentenceContext(sentence, context.timePhrase);
-      }
     }
   }
 
@@ -1541,21 +1796,10 @@ function matchBeiRule(context: RuleContext): string | null {
     return null;
   }
 
-  const actionIndex = findFirstVerbIndex(context.tail);
-  if (actionIndex <= 0) {
-    return null;
-  }
-
-  const agent = translatePhrase(context.tail.slice(0, actionIndex), true);
-  const actionPhrase = translateVerbPhrase(context.tail.slice(actionIndex));
-  return agent && actionPhrase.text
+  const passive = detectPassiveStructure(context.tail);
+  return passive
     ? withSentenceContext(
-        buildPassiveSentence(
-          context.subject,
-          agent,
-          actionPhrase.text,
-          actionPhrase.isPast || actionPhrase.isExperienced,
-        ),
+        buildPassiveSentence(context.subject, passive),
         context.timePhrase,
       )
     : null;
@@ -1567,48 +1811,44 @@ function matchGeiRule(context: RuleContext): string | null {
   }
 
   if (context.tail[0]?.word === "谁") {
-    const actionTokens = context.tail.slice(1);
-    const actionVerb = VERB_TRANSLATIONS[actionTokens[0]?.word || ""];
-    if (actionVerb === "call") {
+    const action = extractActionCore(context.tail.slice(1));
+    if (action?.verb === "call") {
       return withSentenceContext(
         buildWhQuestion("who", context.subject, "do", "call", "on the phone"),
         context.timePhrase,
       );
     }
-    if (actionVerb) {
+    if (action?.verb) {
+      const objectPhrase =
+        translateNaturalPhrase(action.objectTokens, { asObject: true }) ||
+        action.defaultObject ||
+        action.tailObject ||
+        "";
       return withSentenceContext(
-        buildWhQuestion("who", context.subject, "do", actionVerb),
+        buildWhQuestion(
+          "who",
+          context.subject,
+          "do",
+          action.verb,
+          objectPhrase ? `${objectPhrase} to` : "to",
+        ),
         context.timePhrase,
       );
     }
   }
 
-  const actionIndex = findFirstVerbIndex(context.tail);
-  if (actionIndex > 0) {
-    const recipient = translatePhrase(context.tail.slice(0, actionIndex), true);
-    const actionTokens = context.tail.slice(actionIndex);
-    const actionVerb = VERB_TRANSLATIONS[actionTokens[0]?.word || ""];
-    const actionPhrase = translateVerbPhrase(actionTokens.slice(1));
-    return recipient && actionVerb
-      ? withSentenceContext(
-          buildVerbSentence(
-            context.subject,
-            actionVerb,
-            `${actionPhrase.text} for ${recipient}`.trim(),
-            false,
-            false,
-            actionPhrase.isVerbPhrase,
-            actionPhrase.isPast,
-            actionPhrase.isExperienced,
-            actionPhrase.isOngoing,
-          ),
-          context.timePhrase,
-        )
-      : null;
+  const transfer = detectTransferStructure(context.tail);
+  if (transfer) {
+    return withSentenceContext(
+      buildTransferSentence(context.subject, transfer),
+      context.timePhrase,
+    );
   }
 
-  const recipient = translatePhrase(context.tail.slice(0, 1), true);
-  const objectPhrase = translatePhrase(context.tail.slice(1), true);
+  const recipient = normalizeArgumentRolePhrase(context.tail.slice(0, 1));
+  const objectPhrase = translateNaturalPhrase(context.tail.slice(1), {
+    asObject: true,
+  });
   return recipient && objectPhrase
     ? withSentenceContext(
         buildGiveSentence(context.subject, recipient, objectPhrase, false),
