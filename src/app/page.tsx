@@ -53,27 +53,88 @@ const EMPTY_EXAMPLE_BREAKDOWN: CardType["exampleBreakdown"] = {
   segments: [],
 };
 
+function normalizeExampleSentence(value: string | undefined): string {
+  return value?.trim() || "";
+}
+
+function normalizeExampleBreakdown(
+  exampleBreakdown: Partial<CardType["exampleBreakdown"]> | null | undefined,
+  sentenceOverride?: string,
+): CardType["exampleBreakdown"] {
+  const sentence = normalizeExampleSentence(
+    sentenceOverride ?? exampleBreakdown?.sentence,
+  );
+
+  return {
+    ...EMPTY_EXAMPLE_BREAKDOWN,
+    sentence,
+    pinyin: exampleBreakdown?.pinyin?.trim() || "",
+    translation: exampleBreakdown?.translation?.trim() || "",
+    literalGloss: exampleBreakdown?.literalGloss?.trim() || "",
+    translationSource:
+      exampleBreakdown?.translationSource === "exact" ||
+      exampleBreakdown?.translationSource === "rule" ||
+      exampleBreakdown?.translationSource === "fallback"
+        ? exampleBreakdown.translationSource
+        : EMPTY_EXAMPLE_BREAKDOWN.translationSource,
+    confidence:
+      typeof exampleBreakdown?.confidence === "number"
+        ? exampleBreakdown.confidence
+        : EMPTY_EXAMPLE_BREAKDOWN.confidence,
+    segments: Array.isArray(exampleBreakdown?.segments)
+      ? exampleBreakdown.segments
+      : EMPTY_EXAMPLE_BREAKDOWN.segments,
+  };
+}
+
+function toExampleBreakdownFromAnalysis(
+  analysis: SentenceAnalysis,
+  overrides?: {
+    pinyin?: string;
+    translation?: string;
+  },
+): CardType["exampleBreakdown"] {
+  return normalizeExampleBreakdown(
+    {
+      sentence: analysis.sentence,
+      pinyin: overrides?.pinyin?.trim() || analysis.pinyin,
+      translation: overrides?.translation?.trim() || analysis.translation,
+      literalGloss: analysis.literalGloss,
+      translationSource: analysis.translationSource,
+      confidence: analysis.confidence,
+      segments: analysis.segments,
+    },
+    analysis.sentence,
+  );
+}
+
 function toSentenceAnalysis(
   exampleBreakdown: CardType["exampleBreakdown"],
 ): SentenceAnalysis {
+  const normalizedBreakdown = normalizeExampleBreakdown(exampleBreakdown);
+
   return {
-    sentence: exampleBreakdown.sentence,
-    translation: exampleBreakdown.translation,
-    literalGloss: exampleBreakdown.literalGloss || "",
-    translationSource: exampleBreakdown.translationSource,
-    confidence: exampleBreakdown.confidence,
-    pinyin: exampleBreakdown.pinyin,
-    segments: exampleBreakdown.segments,
-    characters: exampleBreakdown.segments.flatMap((segment) => segment.chars),
+    sentence: normalizedBreakdown.sentence,
+    translation: normalizedBreakdown.translation,
+    literalGloss: normalizedBreakdown.literalGloss,
+    translationSource: normalizedBreakdown.translationSource,
+    confidence: normalizedBreakdown.confidence,
+    pinyin: normalizedBreakdown.pinyin,
+    segments: normalizedBreakdown.segments,
+    characters: normalizedBreakdown.segments.flatMap(
+      (segment) => segment.chars,
+    ),
   };
 }
 
 function buildUsageExamples(
   exampleBreakdown: CardType["exampleBreakdown"],
 ): CardType["usageExamples"] | undefined {
+  const normalizedBreakdown = normalizeExampleBreakdown(exampleBreakdown);
+
   if (
-    !exampleBreakdown.sentence.trim() ||
-    exampleBreakdown.segments.length === 0
+    !normalizedBreakdown.sentence ||
+    normalizedBreakdown.segments.length === 0
   ) {
     return undefined;
   }
@@ -81,13 +142,13 @@ function buildUsageExamples(
   return [
     {
       label: "Example",
-      sentence: exampleBreakdown.sentence,
-      pinyin: exampleBreakdown.pinyin,
-      translation: exampleBreakdown.translation,
-      literalGloss: exampleBreakdown.literalGloss,
-      translationSource: exampleBreakdown.translationSource,
-      confidence: exampleBreakdown.confidence,
-      breakdown: exampleBreakdown.segments,
+      sentence: normalizedBreakdown.sentence,
+      pinyin: normalizedBreakdown.pinyin,
+      translation: normalizedBreakdown.translation,
+      literalGloss: normalizedBreakdown.literalGloss,
+      translationSource: normalizedBreakdown.translationSource,
+      confidence: normalizedBreakdown.confidence,
+      breakdown: normalizedBreakdown.segments,
     },
   ];
 }
@@ -283,7 +344,7 @@ export default function ChineseFlashcardApp() {
       exampleTranslation?: string;
       cachedAnalysis?: SentenceAnalysis | null;
     }) => {
-      const trimmedSentence = sentence.trim();
+      const trimmedSentence = normalizeExampleSentence(sentence);
       if (!trimmedSentence) {
         return {
           exampleBreakdown: EMPTY_EXAMPLE_BREAKDOWN,
@@ -292,21 +353,19 @@ export default function ChineseFlashcardApp() {
       }
 
       const exampleBreakdown =
-        cachedAnalysis && cachedAnalysis.sentence === trimmedSentence
-          ? {
-              sentence: trimmedSentence,
-              pinyin: examplePinyin?.trim() || cachedAnalysis.pinyin,
-              translation:
-                exampleTranslation?.trim() || cachedAnalysis.translation,
-              literalGloss: cachedAnalysis.literalGloss,
-              translationSource: cachedAnalysis.translationSource,
-              confidence: cachedAnalysis.confidence,
-              segments: cachedAnalysis.segments,
-            }
-          : buildExampleBreakdown(trimmedSentence, await loadCedict(), {
-              pinyinOverride: examplePinyin,
+        cachedAnalysis &&
+        normalizeExampleSentence(cachedAnalysis.sentence) === trimmedSentence
+          ? toExampleBreakdownFromAnalysis(cachedAnalysis, {
+              pinyin: examplePinyin,
               translation: exampleTranslation,
-            });
+            })
+          : normalizeExampleBreakdown(
+              buildExampleBreakdown(trimmedSentence, await loadCedict(), {
+                pinyinOverride: examplePinyin,
+                translation: exampleTranslation,
+              }),
+              trimmedSentence,
+            );
 
       return {
         exampleBreakdown,
@@ -316,13 +375,29 @@ export default function ChineseFlashcardApp() {
     [],
   );
 
-  const getUpdatedExampleBreakdown = useCallback(
-    async (originalCard: CardType, patch: Partial<CardType>) => {
-      const originalExample = originalCard.example.trim();
-      const updatedExample = (patch.example ?? originalCard.example).trim();
-      const exampleChanged = updatedExample !== originalExample;
+  const resolveExampleData = useCallback(
+    async ({
+      currentSentence,
+      currentBreakdown,
+      nextSentence,
+      nextBreakdown,
+      examplePinyin,
+      exampleTranslation,
+      cachedAnalysis,
+    }: {
+      currentSentence?: string;
+      currentBreakdown?: CardType["exampleBreakdown"];
+      nextSentence: string;
+      nextBreakdown?: CardType["exampleBreakdown"];
+      examplePinyin?: string;
+      exampleTranslation?: string;
+      cachedAnalysis?: SentenceAnalysis | null;
+    }) => {
+      const normalizedCurrentSentence =
+        normalizeExampleSentence(currentSentence);
+      const normalizedNextSentence = normalizeExampleSentence(nextSentence);
 
-      if (!updatedExample) {
+      if (!normalizedNextSentence) {
         return {
           example: "",
           exampleBreakdown: EMPTY_EXAMPLE_BREAKDOWN,
@@ -330,27 +405,59 @@ export default function ChineseFlashcardApp() {
         };
       }
 
-      if (!exampleChanged) {
-        const existingBreakdown =
-          patch.exampleBreakdown &&
-          patch.exampleBreakdown.sentence === updatedExample
-            ? patch.exampleBreakdown
-            : originalCard.exampleBreakdown;
+      const exampleChanged =
+        normalizedNextSentence !== normalizedCurrentSentence;
+
+      if (exampleChanged) {
+        const { exampleBreakdown, usageExamples } = await buildCardExampleData({
+          sentence: normalizedNextSentence,
+        });
 
         return {
-          example: updatedExample,
-          exampleBreakdown: existingBreakdown,
-          usageExamples: buildUsageExamples(existingBreakdown),
+          example: normalizedNextSentence,
+          exampleBreakdown,
+          usageExamples,
         };
       }
 
-      // When the example text changes, always recompute from the new sentence.
+      const safeBreakdown =
+        nextBreakdown &&
+        normalizeExampleSentence(nextBreakdown.sentence) ===
+          normalizedNextSentence
+          ? normalizeExampleBreakdown(nextBreakdown, normalizedNextSentence)
+          : currentBreakdown &&
+              normalizeExampleSentence(currentBreakdown.sentence) ===
+                normalizedNextSentence
+            ? normalizeExampleBreakdown(
+                currentBreakdown,
+                normalizedNextSentence,
+              )
+            : cachedAnalysis &&
+                normalizeExampleSentence(cachedAnalysis.sentence) ===
+                  normalizedNextSentence
+              ? toExampleBreakdownFromAnalysis(cachedAnalysis, {
+                  pinyin: examplePinyin,
+                  translation: exampleTranslation,
+                })
+              : null;
+
+      if (safeBreakdown) {
+        return {
+          example: normalizedNextSentence,
+          exampleBreakdown: safeBreakdown,
+          usageExamples: buildUsageExamples(safeBreakdown),
+        };
+      }
+
       const { exampleBreakdown, usageExamples } = await buildCardExampleData({
-        sentence: updatedExample,
+        sentence: normalizedNextSentence,
+        examplePinyin,
+        exampleTranslation,
+        cachedAnalysis,
       });
 
       return {
-        example: updatedExample,
+        example: normalizedNextSentence,
         exampleBreakdown,
         usageExamples,
       };
@@ -443,9 +550,9 @@ export default function ChineseFlashcardApp() {
 
     try {
       const srsInit = initializeNewCard();
-      const sentence = newCardForm.example.trim();
-      const { exampleBreakdown, usageExamples } = await buildCardExampleData({
-        sentence,
+      const sentence = normalizeExampleSentence(newCardForm.example);
+      const { exampleBreakdown, usageExamples } = await resolveExampleData({
+        nextSentence: sentence,
         examplePinyin: newCardForm.examplePinyin,
         exampleTranslation: newCardForm.exampleTranslation,
         cachedAnalysis: sentenceAnalysis,
@@ -479,11 +586,11 @@ export default function ChineseFlashcardApp() {
       showToast("Failed to create card");
     }
   }, [
-    buildCardExampleData,
     currentDeck,
     deckStatsMap,
     newCardForm,
     resetCardForm,
+    resolveExampleData,
     sentenceAnalysis,
     setCards,
     showToast,
@@ -518,7 +625,12 @@ export default function ChineseFlashcardApp() {
 
       try {
         const { example, exampleBreakdown, usageExamples } =
-          await getUpdatedExampleBreakdown(card, patch);
+          await resolveExampleData({
+            currentSentence: card.example,
+            currentBreakdown: card.exampleBreakdown,
+            nextSentence: patch.example ?? card.example,
+            nextBreakdown: patch.exampleBreakdown,
+          });
 
         const updatedCard = flashcardDb.ensureCardFields({
           ...card,
@@ -539,7 +651,7 @@ export default function ChineseFlashcardApp() {
         showToast("Failed to update card");
       }
     },
-    [cards, getUpdatedExampleBreakdown, setCards, showToast],
+    [cards, resolveExampleData, setCards, showToast],
   );
 
   const handleSearch = useCallback(async () => {
