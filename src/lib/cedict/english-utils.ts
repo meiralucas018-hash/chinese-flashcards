@@ -493,6 +493,26 @@ export function withSentenceContext(
   return `${bareSentence} ${timePhrase}${punctuation}`;
 }
 
+export function joinSentenceClauses(
+  firstClause: string,
+  secondClause: string,
+  options?: { linker?: string; punctuation?: "." | "?" },
+): string {
+  const left = sentenceWithoutPunctuation(firstClause).trim();
+  const right = lowercaseFirst(sentenceWithoutPunctuation(secondClause).trim()).replace(
+    /^i\b/,
+    "I",
+  );
+  if (!left) {
+    return makeSentence(right, options?.punctuation === "?");
+  }
+  if (!right) {
+    return makeSentence(left, options?.punctuation === "?");
+  }
+
+  return `${left}${options?.linker || ", "}${right}${options?.punctuation || "."}`;
+}
+
 export function normalizeLightVerbPhrasing(value: string): string {
   return value
     .replace(

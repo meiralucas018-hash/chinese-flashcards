@@ -16,6 +16,35 @@ export type EnglishPolishValidationCase = {
   expectedTranslationExcludes?: string[];
 };
 
+export type CedictExploratoryValidationCase = {
+  sentence: string;
+  cluster:
+    | "aspect"
+    | "serial-verb"
+    | "ba"
+    | "bei"
+    | "time-place-action"
+    | "negation-modal"
+    | "question"
+    | "possession"
+    | "multi-clause"
+    | "conversation";
+};
+
+export type ExploratoryTranslationQuality =
+  | "good"
+  | "understandable but awkward"
+  | "wrong / broken";
+
+export type CedictExploratoryValidationResult = {
+  sentence: string;
+  cluster: CedictExploratoryValidationCase["cluster"];
+  translation: string;
+  translationSource: string;
+  quality: ExploratoryTranslationQuality;
+  note: string;
+};
+
 export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
   {
     sentence: "你好吗？",
@@ -368,6 +397,54 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
     expectedTranslationIncludes: ["writes", "very well"],
     expectedTranslationExcludes: ["(much, good etc)", "very good"],
   },
+  {
+    sentence: "如果你有时间，我们一起去",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["if you have time", "we", "go together"],
+    expectedTranslationExcludes: ["if you have time we have", "literal"],
+  },
+  {
+    sentence: "这是我昨天买的书",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["this is", "book", "i bought yesterday"],
+    expectedTranslationExcludes: ["i yesterday bought book", "literal"],
+  },
+  {
+    sentence: "我先去洗澡，再睡觉",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["first", "then", "sleep"],
+    expectedTranslationExcludes: ["one side", "literal"],
+  },
+  {
+    sentence: "他一边听音乐一边学习",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["while", "music", "studi"],
+    expectedTranslationExcludes: ["one side", "literal"],
+  },
+  {
+    sentence: "这个问题我还没想好",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["i", "still", "figured out", "question"],
+    expectedTranslationExcludes: ["question i", "literal"],
+  },
+  {
+    sentence: "今天太晚了，来不及了",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["too late today", "enough time"],
+    expectedTranslationExcludes: ["come in time", "literal"],
+  },
+  {
+    sentence: "如果下雨，我就不去了",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["if it rains", "i will not go"],
+    expectedTranslationExcludes: ["if rain", "literal"],
+  },
+  {
+    sentence: "这是他给我的照片",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["this is", "photo", "he gave me"],
+    expectedTranslationExcludes: ["he give me photo", "literal"],
+  },
 ];
 
 export const ENGLISH_POLISH_VALIDATION_CASES: EnglishPolishValidationCase[] = [
@@ -384,6 +461,150 @@ export const ENGLISH_POLISH_VALIDATION_CASES: EnglishPolishValidationCase[] = [
     expectedTranslationExcludes: ["my one"],
   },
 ];
+
+export const CEDICT_EXPLORATORY_VALIDATION_CASES: CedictExploratoryValidationCase[] =
+  [
+    { sentence: "我昨天去了学校。", cluster: "aspect" },
+    { sentence: "我去过北京。", cluster: "aspect" },
+    { sentence: "门开着。", cluster: "aspect" },
+    { sentence: "他把门打开了。", cluster: "ba" },
+    { sentence: "我想去买东西。", cluster: "serial-verb" },
+    { sentence: "你能不能帮我一下？", cluster: "negation-modal" },
+    { sentence: "他昨天在家看书。", cluster: "time-place-action" },
+    { sentence: "我没有看过这本书。", cluster: "aspect" },
+    { sentence: "你为什么不去？", cluster: "negation-modal" },
+    { sentence: "如果你有时间，我们一起去。", cluster: "multi-clause" },
+    { sentence: "这个老师说得很快。", cluster: "aspect" },
+    { sentence: "我给他看了那张照片。", cluster: "serial-verb" },
+    { sentence: "书被他放在桌子上了。", cluster: "bei" },
+    { sentence: "这是我昨天买的书。", cluster: "possession" },
+    { sentence: "你吃了吗？", cluster: "conversation" },
+    { sentence: "我先去洗澡，再睡觉。", cluster: "multi-clause" },
+    { sentence: "他一边听音乐一边学习。", cluster: "multi-clause" },
+    { sentence: "你要不要跟我们一起去？", cluster: "conversation" },
+    { sentence: "这个问题我还没想好。", cluster: "serial-verb" },
+    { sentence: "今天太晚了，来不及了。", cluster: "multi-clause" },
+  ];
+
+function classifyExploratoryTranslation(
+  sentence: string,
+  translation: string,
+  translationSource: string,
+): {
+  quality: ExploratoryTranslationQuality;
+  note: string;
+} {
+  switch (sentence) {
+    case "我昨天去了学校。":
+      return {
+        quality: "good",
+        note: "Past time + motion sentence reads naturally enough to promote once it stays stable.",
+      };
+    case "我去过北京。":
+      return {
+        quality: "wrong / broken",
+        note: "Experiential aspect with 过 falls through to a broken fallback gloss here.",
+      };
+    case "门开着。":
+      return {
+        quality: "wrong / broken",
+        note: "Durative-state sentence with 着 is not handled as a natural stative clause.",
+      };
+    case "他把门打开了。":
+      return {
+        quality: "wrong / broken",
+        note: "This 把 + resultative sentence currently misparses badly despite looking like a high-value target.",
+      };
+    case "我想去买东西。":
+      return {
+        quality: "understandable but awkward",
+        note: "Serial-verb chaining is usually readable but still stiff in English infinitive sequencing.",
+      };
+    case "你能不能帮我一下？":
+      return {
+        quality: "wrong / broken",
+        note: "Negation + modal + benefactive helper question currently produces a malformed English question.",
+      };
+    case "他昨天在家看书。":
+      return {
+        quality: "understandable but awkward",
+        note: "Time + place + action stacking often lands in readable but clunky English word order.",
+      };
+    case "我没有看过这本书。":
+      return {
+        quality: "wrong / broken",
+        note: "Negation plus experiential aspect currently collapses into the wrong verb sense.",
+      };
+    case "你为什么不去？":
+      return {
+        quality: "wrong / broken",
+        note: "Why-question with negation is currently malformed rather than merely stiff.",
+      };
+    case "如果你有时间，我们一起去。":
+      return {
+        quality: "wrong / broken",
+        note: "Conditional two-clause sentence falls outside the current single-clause rule system.",
+      };
+    case "这个老师说得很快。":
+      return {
+        quality: "understandable but awkward",
+        note: "Degree complement with speed adverb is readable but still a little stiff.",
+      };
+    case "我给他看了那张照片。":
+      return {
+        quality: "good",
+        note: "Show/give pattern with a longer object comes out naturally and is worth promoting.",
+      };
+    case "书被他放在桌子上了。":
+      return {
+        quality: "wrong / broken",
+        note: "Passive plus placement complement exceeds current passive handling.",
+      };
+    case "这是我昨天买的书。":
+      return {
+        quality: "wrong / broken",
+        note: "Relative-clause possession is not modeled by the current rule layer.",
+      };
+    case "你吃了吗？":
+      return {
+        quality: "understandable but awkward",
+        note: "The sentence is understandable, but the perfective conversational reading is flatter than natural English.",
+      };
+    case "我先去洗澡，再睡觉。":
+      return {
+        quality: "wrong / broken",
+        note: "Sequenced two-clause actions are outside the current single-clause routing.",
+      };
+    case "他一边听音乐一边学习。":
+      return {
+        quality: "wrong / broken",
+        note: "Concurrent-clause pattern with 一边...一边... is not covered.",
+      };
+    case "你要不要跟我们一起去？":
+      return {
+        quality: "wrong / broken",
+        note: "Longer A-not-A invitation question currently breaks on the companion phrase.",
+      };
+    case "这个问题我还没想好。":
+      return {
+        quality: "wrong / broken",
+        note: "Fronted object plus resultative complement reveals a missing narrow pattern.",
+      };
+    case "今天太晚了，来不及了。":
+      return {
+        quality: "wrong / broken",
+        note: "Multi-clause time-pressure sentence exposes the current clause-combination limit.",
+      };
+    default:
+      return {
+        quality:
+          translationSource === "rule"
+            ? "understandable but awkward"
+            : "wrong / broken",
+        note: "Exploratory case requires manual review.",
+      };
+  }
+}
 
 export async function runCedictValidation(): Promise<
   Array<{
@@ -437,4 +658,28 @@ export async function runCedictValidation(): Promise<
   );
 
   return [...cedictResults, ...englishPolishResults];
+}
+
+export async function runCedictExploratoryValidation(): Promise<
+  CedictExploratoryValidationResult[]
+> {
+  const index = await loadCedict();
+
+  return CEDICT_EXPLORATORY_VALIDATION_CASES.map((testCase) => {
+    const result = buildExampleBreakdown(testCase.sentence, index);
+    const classification = classifyExploratoryTranslation(
+      testCase.sentence,
+      result.translation,
+      result.translationSource,
+    );
+
+    return {
+      sentence: testCase.sentence,
+      cluster: testCase.cluster,
+      translation: result.translation,
+      translationSource: result.translationSource,
+      quality: classification.quality,
+      note: classification.note,
+    };
+  });
 }

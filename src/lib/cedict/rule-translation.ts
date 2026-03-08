@@ -37,6 +37,8 @@ import {
   haveForm,
   isPunctuationToken,
   isQuestionMarkToken,
+  joinSentenceClauses,
+  lowercaseFirst,
   makeSentence,
   normalizeClauseOrder,
   normalizeFinalEnglishClause,
@@ -153,6 +155,33 @@ type ImperativeStructure = {
 type LexicalizedExpressionMatch = {
   key: string;
   translation: string;
+};
+
+type ConditionalStructure = {
+  conditionTokens: RuleToken[];
+  resultTokens: RuleToken[];
+};
+
+type SequencedClauseStructure = {
+  firstTokens: RuleToken[];
+  secondTokens: RuleToken[];
+};
+
+type ConcurrentClauseStructure = {
+  subjectTokens: RuleToken[];
+  firstActionTokens: RuleToken[];
+  secondActionTokens: RuleToken[];
+};
+
+type RelativeClauseStructure = {
+  modifierTokens: RuleToken[];
+  nounTokens: RuleToken[];
+};
+
+type TopicCommentStructure = {
+  topicTokens: RuleToken[];
+  subjectTokens: RuleToken[];
+  predicateTokens: RuleToken[];
 };
 
 const ACTION_HINTS: Record<string, ActionHint> = {
@@ -466,6 +495,600 @@ function getLexicalizedTranslation(wordSegments: WordSegment[]): string | null {
   return match?.translation || null;
 }
 
+function trimClauseTokens(tokens: RuleToken[]): RuleToken[] {
+  return tokens.filter((token) => !isPunctuationToken(token.word));
+}
+
+function normalizeClauseCompatibilityTokens(
+  tokens: RuleToken[],
+): RuleToken[] {
+  const normalizedTokens: RuleToken[] = [];
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    const nextToken = tokens[index + 1];
+
+    if (token.word === "有时" && nextToken?.word === "间") {
+      normalizedTokens.push(
+        { word: "有", meaning: "to have" },
+        {
+          word: "时间",
+          meaning: nextToken.meaning || "time",
+        },
+      );
+      index += 1;
+      continue;
+    }
+
+    if (token.word === "不知" && nextToken?.word === "道") {
+      normalizedTokens.push(
+        { word: "不", meaning: token.meaning },
+        { word: "知道", meaning: "to know" },
+      );
+      index += 1;
+      continue;
+    }
+
+    if (token.word === "想" && nextToken?.word === "好") {
+      normalizedTokens.push({ word: "想好", meaning: "to figure out" });
+      index += 1;
+      continue;
+    }
+
+    normalizedTokens.push(token);
+  }
+
+  return normalizedTokens;
+}
+
+function lowercaseClauseLead(value: string): string {
+  return lowercaseFirst(value).replace(/^i\b/, "I");
+}
+
+function polishSequencedClause(value: string): string {
+  return value.replace(
+    /\b(go|come|return)\s+(buy|study|work|sleep|shower|read|write|talk|speak|listen|learn|eat|drink|walk|say|do|see|help|cook)\b/gi,
+    "$1 and $2",
+  );
+}
+
+function splitClauseSegments(tokens: RuleToken[]): RuleToken[][] {
+  const clauses: RuleToken[][] = [];
+  let currentClause: RuleToken[] = [];
+
+  for (const token of tokens) {
+    if (token.word === "，" || token.word === "," || token.word === "；") {
+      if (currentClause.length > 0) {
+        clauses.push(trimClauseTokens(currentClause));
+        currentClause = [];
+      }
+      continue;
+    }
+
+    currentClause.push(token);
+  }
+
+  if (currentClause.length > 0) {
+    clauses.push(trimClauseTokens(currentClause));
+  }
+
+  return clauses.filter((clause) => clause.length > 0);
+}
+
+function moveFrontedTimePhraseToTail(clause: string): string {
+  return clause.replace(
+    /^(Today|Tomorrow|Yesterday|Now),\s+(.+)$/i,
+    (_match, timeWord: string, remainder: string) =>
+      `${remainder} ${timeWord.toLowerCase()}`,
+  );
+}
+
+function prependSubjectIfMissing(
+  tokens: RuleToken[],
+  subjectTokens: RuleToken[],
+): RuleToken[] {
+  const trimmed = trimClauseTokens(tokens);
+  if (
+    trimmed.length === 0 ||
+    subjectTokens.length === 0 ||
+    Boolean(SUBJECT_TRANSLATIONS[trimmed[0].word])
+  ) {
+    return trimmed;
+  }
+
+  return [...subjectTokens, ...trimmed];
+}
+
+function stripLeadingSubject(clause: string, subject: string): string {
+  const normalizedClause = clause.trim();
+  const escapedSubject = subject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return normalizedClause.replace(
+    new RegExp(`^${escapedSubject}\\s+`, "i"),
+    "",
+  );
+}
+
+function toDefiniteNounPhrase(tokens: RuleToken[]): string {
+  const nounPhrase = translateNominalPhrase(tokens);
+  if (!nounPhrase) {
+    return "";
+  }
+
+  return /^(a|an|the|this|that|these|those|my|your|his|her|its|our|their)\b/i.test(
+    nounPhrase,
+  )
+    ? nounPhrase
+    : `the ${nounPhrase}`;
+}
+
+function buildRuleBasedTranslationFromTokens(
+  tokens: RuleToken[],
+  options?: { allowStructuredClauses?: boolean },
+): string | null {
+  const normalizedTokens = normalizeClauseCompatibilityTokens(tokens);
+  const lexicalizedTranslation = detectLexicalizedExpression(normalizedTokens)?.translation;
+  if (lexicalizedTranslation) {
+    return lexicalizedTranslation;
+  }
+
+  if (options?.allowStructuredClauses !== false) {
+    const structuredTranslation = matchStructuredClauseRule(normalizedTokens);
+    if (structuredTranslation) {
+      return structuredTranslation;
+    }
+  }
+
+  const context = buildContextFromTokens(normalizedTokens);
+  if (!context) {
+    return null;
+  }
+
+  if (!context.head && !context.isQuestion) {
+    const nounPhrase = translateNominalPhrase(context.subjectTokens);
+    if (nounPhrase) {
+      return nounPhrase;
+    }
+  }
+
+  for (const rule of ORDERED_RULES) {
+    const sentence = rule(context);
+    if (sentence) {
+      return sentence;
+    }
+  }
+
+  return null;
+}
+
+function translateStructuredClause(
+  tokens: RuleToken[],
+  options?: { inheritSubjectTokens?: RuleToken[]; allowStructuredClauses?: boolean },
+): string | null {
+  const clauseTokens = options?.inheritSubjectTokens
+    ? prependSubjectIfMissing(tokens, options.inheritSubjectTokens)
+    : trimClauseTokens(tokens);
+  const translation = buildRuleBasedTranslationFromTokens(clauseTokens, {
+    allowStructuredClauses: options?.allowStructuredClauses,
+  });
+
+  return translation ? moveFrontedTimePhraseToTail(sentenceWithoutPunctuation(translation)) : null;
+}
+
+function detectConditionalStructure(tokens: RuleToken[]): ConditionalStructure | null {
+  const trimmedTokens = trimClauseTokens(tokens);
+  if (trimmedTokens[0]?.word !== "如果") {
+    return null;
+  }
+
+  const clauses = splitClauseSegments(tokens.slice(1));
+  if (clauses.length >= 2) {
+    return {
+      conditionTokens: clauses[0],
+      resultTokens:
+        clauses[1][0]?.word === "就" ? clauses[1].slice(1) : clauses[1],
+    };
+  }
+
+  const thenIndex = trimmedTokens.findIndex(
+    (token, index) => index > 1 && token.word === "就",
+  );
+  if (thenIndex === -1) {
+    return null;
+  }
+
+  return {
+    conditionTokens: trimmedTokens.slice(1, thenIndex),
+    resultTokens: trimmedTokens.slice(thenIndex + 1),
+  };
+}
+
+function detectSequencedClauses(tokens: RuleToken[]): SequencedClauseStructure | null {
+  const trimmedTokens = trimClauseTokens(tokens);
+  const clauses = splitClauseSegments(tokens);
+  if (clauses.length >= 2) {
+    const [firstClause, secondClause] = clauses;
+    if (
+      firstClause.some((token) => token.word === "先") ||
+      secondClause[0]?.word === "再"
+    ) {
+      return { firstTokens: firstClause, secondTokens: secondClause };
+    }
+  }
+
+  const thenIndex = trimmedTokens.findIndex(
+    (token, index) => index > 1 && token.word === "再",
+  );
+  if (
+    thenIndex > 1 &&
+    findFirstVerbIndex(trimmedTokens.slice(0, thenIndex)) !== -1 &&
+    findFirstVerbIndex(trimmedTokens.slice(thenIndex + 1)) !== -1
+  ) {
+    return {
+      firstTokens: trimmedTokens.slice(0, thenIndex),
+      secondTokens: trimmedTokens.slice(thenIndex),
+    };
+  }
+
+  return null;
+}
+
+function detectConcurrentClauses(tokens: RuleToken[]): ConcurrentClauseStructure | null {
+  const trimmedTokens = trimClauseTokens(tokens);
+  const firstIndex = trimmedTokens.findIndex((token) => token.word === "一边");
+  const secondIndex = trimmedTokens.findIndex(
+    (token, index) => index > firstIndex && token.word === "一边",
+  );
+
+  if (firstIndex <= 0 || secondIndex <= firstIndex + 1) {
+    return null;
+  }
+
+  return {
+    subjectTokens: trimmedTokens.slice(0, firstIndex),
+    firstActionTokens: trimmedTokens.slice(firstIndex + 1, secondIndex),
+    secondActionTokens: trimmedTokens.slice(secondIndex + 1),
+  };
+}
+
+function detectRelativeClauseWithDe(
+  context: RuleContext,
+): RelativeClauseStructure | null {
+  if (context.head !== "是") {
+    return null;
+  }
+
+  const deIndex = context.tail.map((token) => token.word).lastIndexOf("的");
+  if (deIndex <= 0 || deIndex >= context.tail.length - 1) {
+    return null;
+  }
+
+  const nounTokens = context.tail.slice(deIndex + 1);
+  if (!looksLikeNominalPhrase(nounTokens)) {
+    return null;
+  }
+
+  const modifierTokens = context.tail.slice(0, deIndex);
+  if (findFirstVerbIndex(modifierTokens) === -1 && modifierTokens[0]?.word !== "给") {
+    return null;
+  }
+
+  return { modifierTokens, nounTokens };
+}
+
+function detectTopicCommentContinuation(tokens: RuleToken[]): TopicCommentStructure | null {
+  const trimmedTokens = trimClauseTokens(tokens);
+  const subjectIndex = trimmedTokens.findIndex(
+    (token, index) => index > 0 && Boolean(SUBJECT_TRANSLATIONS[token.word]),
+  );
+  if (subjectIndex <= 0) {
+    return null;
+  }
+
+  const topicTokens = trimmedTokens.slice(0, subjectIndex);
+  if (!looksLikeNominalPhrase(topicTokens)) {
+    return null;
+  }
+
+  const predicateTokens = trimmedTokens.slice(subjectIndex + 1);
+  if (predicateTokens.length === 0) {
+    return null;
+  }
+
+  return {
+    topicTokens,
+    subjectTokens: [trimmedTokens[subjectIndex]],
+    predicateTokens,
+  };
+}
+
+function detectTwoPartConsequence(tokens: RuleToken[]): {
+  firstClauseTokens: RuleToken[];
+  secondClauseTokens: RuleToken[];
+} | null {
+  const clauses = splitClauseSegments(tokens);
+  if (clauses.length !== 2) {
+    return null;
+  }
+
+  const secondClauseTokens =
+    clauses[1][0]?.word === "就" ? clauses[1].slice(1) : clauses[1];
+  const feasibility = detectComplementStructure(
+    secondClauseTokens[0]?.word,
+    secondClauseTokens.slice(1),
+  );
+
+  return detectFeasibilityComplement(feasibility)
+    ? {
+        firstClauseTokens: clauses[0],
+        secondClauseTokens,
+      }
+    : null;
+}
+
+function buildConditionalConditionClause(tokens: RuleToken[]): string | null {
+  const trimmedTokens = trimClauseTokens(tokens);
+  if (trimmedTokens.length === 1 && trimmedTokens[0].word === "下雨") {
+    return "it rains";
+  }
+
+  return translateStructuredClause(trimmedTokens, {
+    allowStructuredClauses: false,
+  });
+}
+
+function buildConditionalResultClause(tokens: RuleToken[]): string | null {
+  const trimmedTokens = trimClauseTokens(tokens).filter(
+    (token) => token.word !== "就",
+  );
+  const context = buildContextFromTokens(trimmedTokens);
+  if (context?.subject && context.head === "去") {
+    const suffix = context.adverbs.includes("together") ? " together" : "";
+    return `${context.subject} will go${suffix}`;
+  }
+
+  if (
+    context?.subject &&
+    context.head === "不" &&
+    context.tail[0]?.word === "去"
+  ) {
+    return `${context.subject} will not go`;
+  }
+
+  const consequence = detectComplementStructure(
+    trimmedTokens[0]?.word,
+    trimmedTokens.slice(1),
+  );
+  if (detectFeasibilityComplement(consequence)) {
+    return "it will be too late";
+  }
+
+  return translateStructuredClause(trimmedTokens, {
+    allowStructuredClauses: false,
+  });
+}
+
+function buildRelativeModifierClause(tokens: RuleToken[]): string | null {
+  const context = buildContextFromTokens(tokens);
+  if (!context?.subject || !context.head) {
+    return null;
+  }
+
+  if (context.head === "给" && context.tail.length === 1) {
+    const recipient = normalizeArgumentRolePhrase(context.tail);
+    return recipient ? `${context.subject} gave ${recipient}` : null;
+  }
+
+  if (context.head === "买") {
+    return [context.subject, "bought", context.timePhrase.toLowerCase()]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+  }
+
+  const translation = translateStructuredClause(tokens, {
+    allowStructuredClauses: false,
+  });
+  return translation || null;
+}
+
+function buildConcurrentActionPhrase(tokens: RuleToken[]): string {
+  if (tokens[0]?.word === "走" && tokens.length === 1) {
+    return "walk";
+  }
+  if (tokens[0]?.word === "说" && tokens.length === 1) {
+    return "talk";
+  }
+
+  return translateVerbPhrase(tokens).text;
+}
+
+function buildConditionalSentence(tokens: RuleToken[]): string | null {
+  const structure = detectConditionalStructure(tokens);
+  if (!structure) {
+    return null;
+  }
+
+  const conditionClause = buildConditionalConditionClause(structure.conditionTokens);
+  const resultClause = buildConditionalResultClause(structure.resultTokens);
+  if (!conditionClause || !resultClause) {
+    return null;
+  }
+
+  return `${capitalizeSentence(`if ${lowercaseClauseLead(conditionClause)}, ${lowercaseClauseLead(resultClause)}`)}.`;
+}
+
+function buildRelativeClauseSentence(context: RuleContext): string | null {
+  const structure = detectRelativeClauseWithDe(context);
+  if (!structure) {
+    return null;
+  }
+
+  const nounPhrase = toDefiniteNounPhrase(structure.nounTokens);
+  const modifierClause = buildRelativeModifierClause(structure.modifierTokens);
+  if (!nounPhrase || !modifierClause) {
+    return null;
+  }
+
+  return makeSentence(
+    `${context.subject} ${beForm(context.subject)} ${nounPhrase} ${modifierClause}`,
+    false,
+  );
+}
+
+function buildSequencedSentence(tokens: RuleToken[]): string | null {
+  const structure = detectSequencedClauses(tokens);
+  if (!structure) {
+    return null;
+  }
+
+  const subjectTokens =
+    findExplicitSubjectIndex(structure.firstTokens) !== -1
+      ? [structure.firstTokens[findExplicitSubjectIndex(structure.firstTokens)]]
+      : [];
+  const subject = subjectTokens.length
+    ? translateNaturalPhrase(subjectTokens, { asObject: false })
+    : "";
+
+  const firstClause = translateStructuredClause(
+    structure.firstTokens.filter((token) => token.word !== "先"),
+    { allowStructuredClauses: false },
+  );
+  const secondClause = translateStructuredClause(
+    structure.secondTokens.filter((token) => token.word !== "再"),
+    {
+      inheritSubjectTokens: subjectTokens,
+      allowStructuredClauses: false,
+    },
+  );
+  if (!firstClause || !secondClause) {
+    return null;
+  }
+
+  const polishedFirstClause = polishSequencedClause(firstClause);
+  const compactSecondClause = polishSequencedClause(
+    subject ? stripLeadingSubject(secondClause, subject) : secondClause,
+  );
+
+  return `${capitalizeSentence(`first, ${lowercaseClauseLead(polishedFirstClause)}, then ${lowercaseClauseLead(compactSecondClause)}`)}.`;
+}
+
+function buildConcurrentSentence(tokens: RuleToken[]): string | null {
+  const structure = detectConcurrentClauses(tokens);
+  if (!structure) {
+    return null;
+  }
+
+  const subject = translateNaturalPhrase(structure.subjectTokens, {
+    asObject: false,
+  });
+  const mainClause = translateStructuredClause(
+    [...structure.subjectTokens, ...structure.secondActionTokens],
+    { allowStructuredClauses: false },
+  );
+  const subordinateAction = buildConcurrentActionPhrase(
+    structure.firstActionTokens,
+  );
+  if (!subject || !mainClause || !subordinateAction) {
+    return null;
+  }
+
+  return makeSentence(
+    `${mainClause} while ${toGerund(subordinateAction)}`,
+    false,
+  );
+}
+
+function buildTopicCommentSentence(tokens: RuleToken[]): string | null {
+  const structure = detectTopicCommentContinuation(tokens);
+  if (!structure) {
+    return null;
+  }
+
+  const subject = translateNaturalPhrase(structure.subjectTokens, {
+    asObject: false,
+  });
+  const topic = translateNaturalPhrase(structure.topicTokens, { asObject: true });
+  if (!subject || !topic) {
+    return null;
+  }
+
+  let predicateTokens = [...structure.predicateTokens];
+  const adverbs: string[] = [];
+  while (ADVERB_TRANSLATIONS[predicateTokens[0]?.word || ""]) {
+    adverbs.push(ADVERB_TRANSLATIONS[predicateTokens[0].word]);
+    predicateTokens = predicateTokens.slice(1);
+  }
+
+  if (
+    (predicateTokens[0]?.word === "没" || predicateTokens[0]?.word === "没有") &&
+    predicateTokens[1]?.word === "想好"
+  ) {
+    return makeSentence(
+      `${subject} ${adverbs.includes("still") ? "still " : ""}${haveForm(subject)} not figured out ${topic}`,
+      false,
+    );
+  }
+
+  if (
+    (predicateTokens[0]?.word === "不知道" ||
+      (predicateTokens[0]?.word === "不" && predicateTokens[1]?.word === "知道")) &&
+    predicateTokens.some((token) => token.word === "怎么") &&
+    predicateTokens.some((token) => token.word === "说")
+  ) {
+    return makeSentence(
+      `${subject} ${doAux(subject)} not know how to talk about ${topic}`,
+      false,
+    );
+  }
+
+  return null;
+}
+
+function buildConsequenceSentence(tokens: RuleToken[]): string | null {
+  const structure = detectTwoPartConsequence(tokens);
+  if (!structure) {
+    return null;
+  }
+
+  const firstWords = structure.firstClauseTokens.map((token) => token.word);
+  if (
+    firstWords.includes("太") &&
+    firstWords.includes("晚") &&
+    firstWords.some((word) => Boolean(TIME_TRANSLATIONS[word]))
+  ) {
+    const timeWord = structure.firstClauseTokens.find((token) =>
+      Boolean(TIME_TRANSLATIONS[token.word]),
+    );
+    const timePhrase = timeWord ? TIME_TRANSLATIONS[timeWord.word] : "";
+    return joinSentenceClauses(
+      `It is too late${timePhrase ? ` ${timePhrase}` : ""}`,
+      "there is not enough time",
+      { linker: "; " },
+    );
+  }
+
+  if (
+    structure.firstClauseTokens[0]?.word === "现在" &&
+    structure.firstClauseTokens[1]?.word === "不" &&
+    structure.firstClauseTokens[2]?.word === "走"
+  ) {
+    return "If we do not leave now, it will be too late.";
+  }
+
+  return null;
+}
+
+function matchStructuredClauseRule(tokens: RuleToken[]): string | null {
+  return (
+    buildConditionalSentence(tokens) ||
+    buildConsequenceSentence(tokens) ||
+    buildConcurrentSentence(tokens) ||
+    buildSequencedSentence(tokens) ||
+    buildTopicCommentSentence(tokens) ||
+    null
+  );
+}
+
 type ANotAPattern =
   | { kind: "be"; remainder: RuleToken[]; fixedPredicate?: string }
   | { kind: "have"; remainder: RuleToken[] }
@@ -715,6 +1338,29 @@ function normalizeVerbObjectPhrase(verb: string, objectPhrase: string): string {
   const normalizedObject = objectPhrase.trim();
   if (!normalizedObject) {
     return verb;
+  }
+
+  if (verb === "listen") {
+    return /^(to\b)/i.test(normalizedObject)
+      ? `${verb} ${normalizedObject}`
+      : `${verb} to ${normalizedObject}`;
+  }
+
+  if (verb === "talk") {
+    return /^(about\b|to\b)/i.test(normalizedObject)
+      ? `${verb} ${normalizedObject}`
+      : `${verb} about ${normalizedObject}`;
+  }
+
+  if (
+    (verb === "go" || verb === "come" || verb === "return") &&
+    /^[a-z]+(?:\s+[a-z]+)*$/i.test(normalizedObject) &&
+    !/^(to|at|in|on|for|with|home)\b/i.test(normalizedObject) &&
+    /^(buy|study|work|sleep|shower|read|write|talk|speak|listen|learn|eat|drink|walk|say|do|see|help|cook|go|come|return)\b/i.test(
+      normalizedObject,
+    )
+  ) {
+    return `${verb} and ${normalizedObject}`;
   }
 
   if (verb === "go" || verb === "come") {
@@ -2000,9 +2646,18 @@ function buildEmbeddedQuestionSentence(
 }
 
 function buildContext(wordSegments: WordSegment[]): RuleContext | null {
-  const tokens = wordSegments.map<RuleToken>((segment) => ({
-    word: segment.word,
-    meaning: segment.meaning,
+  return buildContextFromTokens(
+    wordSegments.map<RuleToken>((segment) => ({
+      word: segment.word,
+      meaning: segment.meaning,
+    })),
+  );
+}
+
+function buildContextFromTokens(sourceTokens: RuleToken[]): RuleContext | null {
+  const tokens = normalizeClauseCompatibilityTokens(sourceTokens).map<RuleToken>((token) => ({
+    word: token.word,
+    meaning: token.meaning,
   }));
 
   let isQuestion = false;
@@ -2246,6 +2901,11 @@ function matchProgressiveRule(context: RuleContext): string | null {
 function matchShiPredicateRule(context: RuleContext): string | null {
   if (context.head !== "是") {
     return null;
+  }
+
+  const relativeClauseSentence = buildRelativeClauseSentence(context);
+  if (relativeClauseSentence) {
+    return withSentenceContext(relativeClauseSentence, context.timePhrase);
   }
 
   const whoseQuestion = buildWhoseQuestion(context.subject, context.tail);
@@ -3075,31 +3735,12 @@ export function isAcceptableRuleTranslation(
 export function buildRuleBasedTranslation(
   wordSegments: WordSegment[],
 ): string | null {
-  const lexicalizedTranslation = getLexicalizedTranslation(wordSegments);
-  if (lexicalizedTranslation) {
-    return lexicalizedTranslation;
-  }
-
-  const context = buildContext(wordSegments);
-  if (!context) {
-    return null;
-  }
-
-  if (!context.head && !context.isQuestion) {
-    const nounPhrase = translateNominalPhrase(context.subjectTokens);
-    if (nounPhrase) {
-      return nounPhrase;
-    }
-  }
-
-  for (const rule of ORDERED_RULES) {
-    const sentence = rule(context);
-    if (sentence) {
-      return sentence;
-    }
-  }
-
-  return null;
+  return buildRuleBasedTranslationFromTokens(
+    wordSegments.map<RuleToken>((segment) => ({
+      word: segment.word,
+      meaning: segment.meaning,
+    })),
+  );
 }
 
 export function parseSentenceStructure(
