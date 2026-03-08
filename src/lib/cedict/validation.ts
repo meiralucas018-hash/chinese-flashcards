@@ -574,7 +574,11 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
   {
     sentence: "这句话我听不懂。",
     expectedSource: "rule",
-    expectedTranslationIncludes: ["cannot understand", "sentence", "when i hear it"],
+    expectedTranslationIncludes: [
+      "cannot understand",
+      "sentence",
+      "when i hear it",
+    ],
     expectedTranslationExcludes: ["dialect", "hearing this sentence"],
   },
   {
@@ -604,7 +608,9 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
   {
     sentence: "那是我小时候住过的地方。",
     expectedSource: "rule",
-    expectedTranslationIncludes: ["that is the place where i lived when i was a child"],
+    expectedTranslationIncludes: [
+      "that is the place where i lived when i was a child",
+    ],
     expectedTranslationExcludes: ["of course", "region before"],
   },
   {
@@ -616,7 +622,10 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
   {
     sentence: "如果你有空的话，我们明天一起去吧。",
     expectedSource: "rule",
-    expectedTranslationIncludes: ["if you are free", "let's go together tomorrow"],
+    expectedTranslationIncludes: [
+      "if you are free",
+      "let's go together tomorrow",
+    ],
     expectedTranslationExcludes: ["bar", "in the same place"],
   },
   {
@@ -670,8 +679,68 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
   {
     sentence: "我本来想去，但是后来没去了。",
     expectedSource: "rule",
-    expectedTranslationIncludes: ["originally wanted to go", "later i did not go"],
+    expectedTranslationIncludes: [
+      "originally wanted to go",
+      "later i did not go",
+    ],
     expectedTranslationExcludes: ["afterwards drowned", "original to think"],
+  },
+  {
+    sentence: "我叫小李。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["my name is xiao li"],
+    expectedTranslationExcludes: ["small plum", "i is called"],
+  },
+  {
+    sentence: "我是中国学生。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["i am a chinese student"],
+    expectedTranslationExcludes: ["china / student", "china student", "i / am"],
+  },
+  {
+    sentence: "我以前看过这部电影。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["have watched this movie before"],
+    expectedTranslationExcludes: ["look after", "ministry movie", "am before"],
+  },
+  {
+    sentence: "这是他昨天拍的照片。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["this is the photo he took yesterday"],
+    expectedTranslationExcludes: ["pat", "photograph"],
+  },
+  {
+    sentence: "我昨天给你发消息了。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["yesterday, i sent you a message"],
+    expectedTranslationExcludes: ["send out news", "gave you send"],
+  },
+  {
+    sentence: "如果这家店今天打折，我就多买几件。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "if this store is on sale today",
+      "i will buy a few more items",
+    ],
+    expectedTranslationExcludes: ["home inn", "small table", "to give a discount"],
+  },
+  {
+    sentence: "这是第一次有人把我的名字念对，所以我有一点惊讶。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "first time someone has pronounced my name correctly",
+      "i am a little surprised",
+    ],
+    expectedTranslationExcludes: ["to hold", "read right", "name / to"],
+  },
+  {
+    sentence: "如果你今天有时间的话，能不能帮我看一下这个文件？",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "if you have time today",
+      "can you help me take a look at this document",
+    ],
+    expectedTranslationExcludes: ["can or not", "look after", "between"],
   },
 ];
 

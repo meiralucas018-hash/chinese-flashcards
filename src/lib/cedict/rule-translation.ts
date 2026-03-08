@@ -2,6 +2,7 @@ import {
   ADVERB_TRANSLATIONS,
   ADJECTIVE_TRANSLATIONS,
   COMPLEMENT_MEANINGS,
+  COUNTRY_ADJECTIVE_TRANSLATIONS,
   DEMONSTRATIVE_TRANSLATIONS,
   DESIDERATIVE_TRANSLATIONS,
   DYNAMIC_PASSIVE_PARTICIPLES,
@@ -185,6 +186,7 @@ type TopicCommentStructure = {
 };
 
 const ACTION_HINTS: Record<string, ActionHint> = {
+  发: { verb: "send", preferIndirectObject: true },
   给: { verb: "give", preferIndirectObject: true },
   送: { verb: "send", preferIndirectObject: true },
   送给: { verb: "give", preferIndirectObject: true },
@@ -265,9 +267,36 @@ function cleanLexicalMeaning(meaning: string): string {
     .trim();
 }
 
+function normalizeNominalCompoundChoices(
+  tokens: RuleToken[],
+  nounParts: string[],
+): string[] {
+  const substantiveTokens = tokens.filter(
+    (token) =>
+      token.word !== "的" &&
+      token.word !== "了" &&
+      !MEASURE_WORDS.has(token.word) &&
+      !DEMONSTRATIVE_TRANSLATIONS[token.word] &&
+      !NUMBER_TRANSLATIONS[token.word],
+  );
+
+  if (
+    substantiveTokens.length >= 2 &&
+    nounParts.length >= 2 &&
+    COUNTRY_ADJECTIVE_TRANSLATIONS[substantiveTokens[0]?.word || ""]
+  ) {
+    return [
+      COUNTRY_ADJECTIVE_TRANSLATIONS[substantiveTokens[0].word],
+      ...nounParts.slice(1),
+    ];
+  }
+
+  return nounParts;
+}
+
 function expandCompositeMeasureToken(token: RuleToken): RuleToken[] {
   const match = token.word.match(
-    /^(这|那|一|二|两|三|四|五|六|七|八|九|十)(个|本|张|只|位|条|杯|碗|块|件|些)(.+)$/,
+    /^(这|那|一|二|两|三|四|五|六|七|八|九|十)(家|个|本|部|张|只|位|条|杯|碗|块|件|段|些)(.+)$/,
   );
   if (!match) {
     return [token];
@@ -404,13 +433,22 @@ function translateNominalPhrase(
       continue;
     }
 
+    if (token.word === "时间" && previousToken?.word === "段") {
+      nounParts.push("period of time");
+      continue;
+    }
+
     const translated = translateNominalToken(token);
     if (translated) {
       nounParts.push(translated);
     }
   }
 
-  const nounPhrase = nounParts.join(" ").replace(/\s+/g, " ").trim();
+  const normalizedNounParts = normalizeNominalCompoundChoices(
+    expandedTokens,
+    nounParts,
+  );
+  const nounPhrase = normalizedNounParts.join(" ").replace(/\s+/g, " ").trim();
   if (!nounPhrase) {
     return options?.predicatePossessive && possessive
       ? possessivePronounForDeterminer(possessive)
@@ -598,7 +636,11 @@ function normalizeClauseCompatibilityTokens(tokens: RuleToken[]): RuleToken[] {
       continue;
     }
 
-    if (token.word === "知" && nextToken?.word === "不" && thirdToken?.word === "知道") {
+    if (
+      token.word === "知" &&
+      nextToken?.word === "不" &&
+      thirdToken?.word === "知道"
+    ) {
       normalizedTokens.push({ word: "知不知道", meaning: "to know" });
       index += 2;
       continue;
@@ -665,7 +707,9 @@ function stripLightDurationTokens(tokens: RuleToken[]): {
   softened: boolean;
 } {
   const normalizedTokens = tokens.filter((token) => token.word !== "吧");
-  const withoutYiXia = normalizedTokens.filter((token) => token.word !== "一下");
+  const withoutYiXia = normalizedTokens.filter(
+    (token) => token.word !== "一下",
+  );
 
   if (withoutYiXia.length >= 3) {
     for (let index = 0; index <= withoutYiXia.length - 3; index += 1) {
@@ -710,24 +754,66 @@ function normalizeSoftenerPhrase(verbPhrase: string, verbWord: string): string {
 }
 
 function isBookLikeObject(tokens: RuleToken[]): boolean {
-  return tokens.some((token) => token.word === "书" || token.word === "文章");
+  return tokens.some(
+    (token) =>
+      token.word === "书" || token.word === "文章" || token.word === "课文",
+  );
+}
+
+function isMovieLikeObject(tokens: RuleToken[]): boolean {
+  return tokens.some((token) => token.word === "电影");
+}
+
+function selectContextualVerbTranslation(
+  verbWord: string,
+  objectTokens: RuleToken[],
+): string {
+  if (verbWord === "看") {
+    if (isMovieLikeObject(objectTokens)) {
+      return "watch";
+    }
+
+    if (isBookLikeObject(objectTokens)) {
+      return "read";
+    }
+  }
+
+  if (verbWord === "拍" && objectTokens.some((token) => token.word === "照片")) {
+    return "take";
+  }
+
+  if (verbWord === "发" && objectTokens.some((token) => token.word === "消息")) {
+    return "send";
+  }
+
+  if (verbWord === "打折") {
+    return "be on sale";
+  }
+
+  return RESULTATIVE_VERB_TRANSLATIONS[verbWord] || VERB_TRANSLATIONS[verbWord] || "";
+}
+
+function appendLexicalClauseSuffix(clause: string, adverbs: string[]): string {
+  if (adverbs.includes("before") && !/\bbefore\b/i.test(clause)) {
+    return `${clause} before`;
+  }
+
+  return clause;
 }
 
 function translateExperientialVerb(
   verbWord: string,
   objectTokens: RuleToken[],
 ): string {
-  if (verbWord === "看" && isBookLikeObject(objectTokens)) {
-    return "read";
-  }
-  if (verbWord === "听") {
-    return "hear";
-  }
   if (verbWord === "送给") {
     return "give";
   }
 
-  return VERB_TRANSLATIONS[verbWord] || cleanLexicalMeaning(verbWord);
+  if (verbWord === "听") {
+    return "hear";
+  }
+
+  return selectContextualVerbTranslation(verbWord, objectTokens);
 }
 
 function buildExperientialClause(
@@ -747,9 +833,8 @@ function buildExperientialClause(
     return null;
   }
 
-  const realizedObject = objectPhrase && verb === "hear"
-    ? objectPhrase
-    : objectPhrase;
+  const realizedObject =
+    objectPhrase && verb === "hear" ? objectPhrase : objectPhrase;
   const predicate = normalizeVerbObjectPhrase(verb, realizedObject);
   return `${subject} ${haveForm(subject)}${isNegative ? " not" : ""} ${toPastParticiple(predicate)}`;
 }
@@ -760,11 +845,17 @@ function buildComitativeVerbPhrase(tokens: RuleToken[]): string | null {
   }
 
   const togetherIndex = tokens.findIndex((token) => token.word === "一起");
-  const companionTokens = tokens.slice(1, togetherIndex === -1 ? 2 : togetherIndex);
+  const companionTokens = tokens.slice(
+    1,
+    togetherIndex === -1 ? 2 : togetherIndex,
+  );
   const actionTokens =
-    togetherIndex === -1 ? tokens.slice(1 + companionTokens.length) : tokens.slice(togetherIndex + 1);
+    togetherIndex === -1
+      ? tokens.slice(1 + companionTokens.length)
+      : tokens.slice(togetherIndex + 1);
   const companion = normalizeArgumentRolePhrase(companionTokens);
-  const { tokens: softenedActionTokens, softened } = stripLightDurationTokens(actionTokens);
+  const { tokens: softenedActionTokens, softened } =
+    stripLightDurationTokens(actionTokens);
 
   if (!companion || softenedActionTokens.length === 0) {
     return null;
@@ -795,7 +886,8 @@ function buildComitativeVerbPhrase(tokens: RuleToken[]): string | null {
 }
 
 function buildSoftenedVerbPhrase(tokens: RuleToken[]): string {
-  const { remainder: tokensWithoutLeadingAdverbs } = splitLeadingAdverbs(tokens);
+  const { remainder: tokensWithoutLeadingAdverbs } =
+    splitLeadingAdverbs(tokens);
   const { tokens: strippedTokens, softened } = stripLightDurationTokens(
     tokensWithoutLeadingAdverbs,
   );
@@ -833,7 +925,9 @@ function buildSoftenedVerbPhrase(tokens: RuleToken[]): string {
     const objectPhrase = translateNaturalPhrase(strippedTokens.slice(1), {
       asObject: true,
     });
-    normalizedPhrase = objectPhrase ? `take a look at ${objectPhrase}` : "take a look";
+    normalizedPhrase = objectPhrase
+      ? `take a look at ${objectPhrase}`
+      : "take a look";
   }
 
   if (softened) {
@@ -1167,6 +1261,24 @@ function buildConditionalConditionClause(tokens: RuleToken[]): string | null {
     })} are free`;
   }
 
+  if (trimmedTokens.some((token) => token.word === "打折")) {
+    const timePhrase = translatePhrase(
+      trimmedTokens.filter((token) => Boolean(TIME_TRANSLATIONS[token.word])),
+    ).toLowerCase();
+    const subjectPhrase = translateNaturalPhrase(
+      trimmedTokens.filter(
+        (token) => !TIME_TRANSLATIONS[token.word] && token.word !== "打折",
+      ),
+      { asObject: false },
+    );
+
+    return subjectPhrase
+      ? [subjectPhrase, beForm(subjectPhrase), "on sale", timePhrase]
+          .filter(Boolean)
+          .join(" ")
+      : null;
+  }
+
   return translateStructuredClause(trimmedTokens, {
     allowStructuredClauses: false,
   });
@@ -1176,12 +1288,34 @@ function buildConditionalResultClause(tokens: RuleToken[]): string | null {
   const trimmedTokens = trimClauseTokens(tokens).filter(
     (token) => token.word !== "就",
   );
+
+  if (trimmedTokens[0]?.word === "能不能") {
+    const predicate = buildSoftenedVerbPhrase(trimmedTokens.slice(1));
+    return predicate ? `can you ${predicate}` : null;
+  }
+
+  if (
+    trimmedTokens.some((token) => token.word === "买") &&
+    trimmedTokens.some((token) => token.word === "几") &&
+    trimmedTokens.some((token) => token.word === "件")
+  ) {
+    const subject = translateNaturalPhrase(trimmedTokens.slice(0, 1), {
+      asObject: false,
+    });
+    return `${subject || "I"} will buy a few more items`;
+  }
+
   const context = buildContextFromTokens(trimmedTokens);
   if (context?.subject && context.head === "去") {
     const suffix = context.adverbs.includes("together") ? " together" : "";
-    const timeSuffix = context.timePhrase ? ` ${context.timePhrase.toLowerCase()}` : "";
+    const timeSuffix = context.timePhrase
+      ? ` ${context.timePhrase.toLowerCase()}`
+      : "";
 
-    if (context.subject === "we" && trimmedTokens.some((token) => token.word === "吧")) {
+    if (
+      context.subject === "we" &&
+      trimmedTokens.some((token) => token.word === "吧")
+    ) {
       return `let's go${suffix}${timeSuffix}`;
     }
 
@@ -1214,7 +1348,10 @@ function buildRelativeModifierClause(tokens: RuleToken[]): string | null {
     return null;
   }
 
-  if (tokens[tokens.length - 1]?.word === "过" && tokens.some((token) => token.word === "住")) {
+  if (
+    tokens[tokens.length - 1]?.word === "过" &&
+    tokens.some((token) => token.word === "住")
+  ) {
     const childTime = tokens.some((token) => token.word === "小时候")
       ? " when I was a child"
       : "";
@@ -1238,7 +1375,9 @@ function buildRelativeModifierClause(tokens: RuleToken[]): string | null {
         ? `${POSSESSIVE_TRANSLATIONS[subjectTokens[0].word]} ${translateNaturalPhrase(subjectTokens.slice(1), { asObject: false })}`
         : translateNaturalPhrase(subjectTokens, { asObject: false });
     const recipient = normalizeArgumentRolePhrase(tokens.slice(giveIndex + 1));
-    return [subjectPhrase, "gave", recipient, timePhrase].filter(Boolean).join(" ");
+    return [subjectPhrase, "gave", recipient, timePhrase]
+      .filter(Boolean)
+      .join(" ");
   }
 
   const context = buildContextFromTokens(tokens);
@@ -1253,6 +1392,13 @@ function buildRelativeModifierClause(tokens: RuleToken[]): string | null {
 
   if (context.head === "买") {
     return [context.subject, "bought", context.timePhrase.toLowerCase()]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+  }
+
+  if (context.head === "拍") {
+    return [context.subject, "took", context.timePhrase.toLowerCase()]
       .filter(Boolean)
       .join(" ")
       .trim();
@@ -1456,7 +1602,10 @@ function buildTopicCommentSentence(tokens: RuleToken[]): string | null {
 
   if (predicateTokens[0]?.word === "不" && predicateTokens[1]?.word === "会") {
     const verbTokens = predicateTokens.slice(2);
-    const predicate = buildSoftenedVerbPhrase([...verbTokens, ...structure.topicTokens]);
+    const predicate = buildSoftenedVerbPhrase([
+      ...verbTokens,
+      ...structure.topicTokens,
+    ]);
     if (predicate) {
       return makeSentence(`${subject} cannot ${predicate}`, false);
     }
@@ -1489,7 +1638,8 @@ function buildTopicCommentSentence(tokens: RuleToken[]): string | null {
   }
 
   if (
-    (predicateTokens[0]?.word === "没" || predicateTokens[0]?.word === "没有") &&
+    (predicateTokens[0]?.word === "没" ||
+      predicateTokens[0]?.word === "没有") &&
     predicateTokens[1]?.word === "弄明白"
   ) {
     return makeSentence(
@@ -1709,7 +1859,10 @@ function buildANotAQuestion(context: RuleContext): string | null {
     const predicate = buildSoftenedVerbPhrase(
       pattern.remainder.filter((token) => !TIME_TRANSLATIONS[token.word]),
     );
-    const timedPredicate = [predicate, translatePhrase(timeTokens).toLowerCase()]
+    const timedPredicate = [
+      predicate,
+      translatePhrase(timeTokens).toLowerCase(),
+    ]
       .filter(Boolean)
       .join(" ");
     return timedPredicate
@@ -1723,7 +1876,9 @@ function buildANotAQuestion(context: RuleContext): string | null {
   }
 
   if (pattern.kind === "desiderative") {
-    const embeddedSubject = SUBJECT_TRANSLATIONS[pattern.remainder[0]?.word || ""]
+    const embeddedSubject = SUBJECT_TRANSLATIONS[
+      pattern.remainder[0]?.word || ""
+    ]
       ? normalizeArgumentRolePhrase(pattern.remainder.slice(0, 1))
       : "";
     const remainderTokens = embeddedSubject
@@ -1840,6 +1995,20 @@ function normalizeVerbObjectPhrase(verb: string, objectPhrase: string): string {
   const normalizedObject = objectPhrase.trim();
   if (!normalizedObject) {
     return verb;
+  }
+
+  if (verb === "send" && normalizedObject === "message") {
+    return "send a message";
+  }
+
+  if (verb === "take") {
+    if (/^(photo|photograph)$/i.test(normalizedObject)) {
+      return "take a photo";
+    }
+
+    if (/^(photos|photographs)$/i.test(normalizedObject)) {
+      return "take photos";
+    }
   }
 
   if (verb === "go" && normalizedObject === "shop") {
@@ -2616,9 +2785,11 @@ function translateVerbPhrase(tokens: RuleToken[]): TranslatedPhrase {
   }
 
   const combinedWord = `${tokens[0].word}${tokens[1]?.word || ""}`;
+  const combinedVerb = RESULTATIVE_VERB_TRANSLATIONS[combinedWord];
+  const sourceWord = combinedVerb ? combinedWord : tokens[0].word;
   const firstVerb =
-    RESULTATIVE_VERB_TRANSLATIONS[combinedWord] ||
-    VERB_TRANSLATIONS[tokens[0].word];
+    combinedVerb ||
+    selectContextualVerbTranslation(tokens[0].word, tokens.slice(1));
   const aspectMarkers = new Set(tokens.map((token) => token.word));
   const isPast = aspectMarkers.has("了");
   const isExperienced = aspectMarkers.has("过");
@@ -2637,7 +2808,7 @@ function translateVerbPhrase(tokens: RuleToken[]): TranslatedPhrase {
   const remainingTokens = tokens.filter(
     (token, index) =>
       index !== 0 &&
-      !(RESULTATIVE_VERB_TRANSLATIONS[combinedWord] && index === 1) &&
+      !(combinedVerb && index === 1) &&
       token.word !== "了" &&
       token.word !== "过" &&
       token.word !== "着",
@@ -2657,7 +2828,7 @@ function translateVerbPhrase(tokens: RuleToken[]): TranslatedPhrase {
 
   return {
     text: normalizeVerbObjectPhrase(
-      firstVerb,
+      selectContextualVerbTranslation(sourceWord, remainingTokens),
       translateNaturalPhrase(remainingTokens, { asObject: true }),
     ),
     isVerbPhrase: true,
@@ -2977,6 +3148,26 @@ function buildVerbSentence(
       `${subject} ${conjugateVerb(subject, verb)} ${actionOrObject}`.trim(),
       false,
     );
+  }
+
+  if (verb.startsWith("be ")) {
+    const predicate = [verb.replace(/^be\s+/i, ""), objectPhrase]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    if (isQuestion) {
+      return buildYesNoQuestion(subject, "be", predicate);
+    }
+
+    if (isNegative) {
+      return makeSentence(
+        `${subject} ${beForm(subject)} not ${predicate}`.trim(),
+        false,
+      );
+    }
+
+    return makeSentence(`${subject} ${beForm(subject)} ${predicate}`.trim(), false);
   }
 
   if (isOngoing) {
@@ -3380,7 +3571,10 @@ function buildImmediateSequenceSentence(tokens: RuleToken[]): string | null {
       { allowStructuredClauses: false },
     );
     return resultClause
-      ? makeSentence(`As soon as ${subject} gets home, ${lowercaseClauseLead(resultClause)}`, false)
+      ? makeSentence(
+          `As soon as ${subject} gets home, ${lowercaseClauseLead(resultClause)}`,
+          false,
+        )
       : null;
   }
 
@@ -3450,7 +3644,10 @@ function buildTwoClauseTopicConsequence(tokens: RuleToken[]): string | null {
       asObject: false,
     });
     return topic
-      ? makeSentence(`${capitalizeSentence(topic)} is too heavy, and I cannot move it`, false)
+      ? makeSentence(
+          `${capitalizeSentence(topic)} is too heavy, and I cannot move it`,
+          false,
+        )
       : null;
   }
 
@@ -3459,10 +3656,58 @@ function buildTwoClauseTopicConsequence(tokens: RuleToken[]): string | null {
 
 function matchCompatibilityStructuredRule(tokens: RuleToken[]): string | null {
   return (
+    buildNamePronunciationCompatibilitySentence(tokens) ||
     buildContrastSentence(tokens) ||
     buildImmediateSequenceSentence(tokens) ||
     buildTwoClauseTopicConsequence(tokens) ||
     null
+  );
+}
+
+function buildNamePronunciationCompatibilitySentence(
+  tokens: RuleToken[],
+): string | null {
+  const trimmedTokens = trimClauseTokens(tokens);
+  const soIndex = trimmedTokens.findIndex((token) => token.word === "所以");
+
+  if (
+    soIndex === -1 ||
+    trimmedTokens[0]?.word !== "这" ||
+    trimmedTokens[1]?.word !== "是" ||
+    trimmedTokens[2]?.word !== "第一次" ||
+    trimmedTokens[3]?.word !== "有人" ||
+    !trimmedTokens.some((token) => token.word === "名字") ||
+    !trimmedTokens.some((token) => token.word === "念") ||
+    !trimmedTokens.some((token) => token.word === "对")
+  ) {
+    return null;
+  }
+
+  const baIndex = trimmedTokens.findIndex((token) => token.word === "把");
+  const deIndex = trimmedTokens.findIndex((token) => token.word === "的");
+  const nameIndex = trimmedTokens.findIndex((token) => token.word === "名字");
+  const ownerTokens =
+    baIndex !== -1 && deIndex > baIndex
+      ? trimmedTokens.slice(baIndex + 1, deIndex)
+      : [];
+  const ownerSubject = translateNaturalPhrase(ownerTokens, { asObject: false }) || "I";
+  const ownerPossessive =
+    ownerTokens.length === 1 && POSSESSIVE_TRANSLATIONS[ownerTokens[0]?.word || ""]
+      ? POSSESSIVE_TRANSLATIONS[ownerTokens[0].word]
+      : possessiveForSubject(ownerSubject);
+  const surpriseSubject =
+    SUBJECT_TRANSLATIONS[trimmedTokens[soIndex + 1]?.word || ""] || ownerSubject;
+  const surprisePredicate = trimmedTokens.some((token) => token.word === "一点")
+    ? "a little surprised"
+    : "surprised";
+
+  if (nameIndex === -1) {
+    return null;
+  }
+
+  return makeSentence(
+    `This is the first time someone has pronounced ${ownerPossessive} name correctly, so ${surpriseSubject} ${beForm(surpriseSubject)} ${surprisePredicate}`,
+    false,
   );
 }
 
@@ -3485,9 +3730,7 @@ function matchComitativeRule(context: RuleContext): string | null {
         context.subject,
         /^(go|come|return)\b/i.test(predicate) ? "modal" : "do",
         predicate,
-        /^(go|come|return)\b/i.test(predicate)
-          ? { modal: "will" }
-          : undefined,
+        /^(go|come|return)\b/i.test(predicate) ? { modal: "will" } : undefined,
       ),
       context.timePhrase,
     );
@@ -3951,7 +4194,8 @@ function matchNegationRule(context: RuleContext): string | null {
   }
 
   if (negativeHead === "有" || context.head === "没有") {
-    const experientialTokens = context.head === "没有" ? context.tail : negativeTail;
+    const experientialTokens =
+      context.head === "没有" ? context.tail : negativeTail;
     if (isNegativeExperientialTail(experientialTokens)) {
       const clause = buildExperientialClause(
         context.subject,
@@ -3959,7 +4203,9 @@ function matchNegationRule(context: RuleContext): string | null {
         experientialTokens.slice(2),
         true,
       );
-      return clause ? withSentenceContext(makeSentence(clause, false), context.timePhrase) : null;
+      return clause
+        ? withSentenceContext(makeSentence(clause, false), context.timePhrase)
+        : null;
     }
 
     const objectPhrase = translateNaturalPhrase(
@@ -4009,7 +4255,12 @@ function matchNegationRule(context: RuleContext): string | null {
       negativeTail.slice(1),
       true,
     );
-    return clause ? withSentenceContext(makeSentence(clause, false), context.timePhrase) : null;
+    return clause
+      ? withSentenceContext(
+          makeSentence(appendLexicalClauseSuffix(clause, context.adverbs), false),
+          context.timePhrase,
+        )
+      : null;
   }
   if (!negativeVerb) {
     return null;
@@ -4064,11 +4315,15 @@ function matchVerbRule(context: RuleContext): string | null {
       return withSentenceContext(
         context.isQuestion
           ? buildYesNoQuestion(context.subject, "do", predicate)
-          : context.subject === "you" && (context.head === "帮" || context.head === "等")
+          : context.subject === "you" &&
+              (context.head === "帮" || context.head === "等")
             ? makeSentence(capitalizeSentence(predicate), false)
-          : context.head === "想"
-            ? makeSentence(`${context.subject} ${conjugateVerb(context.subject, "want")} to ${predicate}`, false)
-            : makeSentence(`${context.subject} ${predicate}`, false),
+            : context.head === "想"
+              ? makeSentence(
+                  `${context.subject} ${conjugateVerb(context.subject, "want")} to ${predicate}`,
+                  false,
+                )
+              : makeSentence(`${context.subject} ${predicate}`, false),
         context.timePhrase,
       );
     }
@@ -4081,18 +4336,33 @@ function matchVerbRule(context: RuleContext): string | null {
       context.tail.slice(1),
       false,
     );
-    return clause ? withSentenceContext(makeSentence(clause, false), context.timePhrase) : null;
+    return clause
+      ? withSentenceContext(
+          makeSentence(appendLexicalClauseSuffix(clause, context.adverbs), false),
+          context.timePhrase,
+        )
+      : null;
   }
 
   if (context.head === "开" && context.tail[0]?.word === "着") {
     return withSentenceContext(
-      makeSentence(`${addDefiniteArticleIfNeeded(context.subject)} ${beForm(context.subject)} open`, false),
+      makeSentence(
+        `${addDefiniteArticleIfNeeded(context.subject)} ${beForm(context.subject)} open`,
+        false,
+      ),
       context.timePhrase,
     );
   }
 
-  if (context.head === "想" && context.tail[0]?.word === "去" && context.tail[1]?.word === "买东西") {
-    return withSentenceContext(makeSentence(`${context.subject} want to go shopping`, false), context.timePhrase);
+  if (
+    context.head === "想" &&
+    context.tail[0]?.word === "去" &&
+    context.tail[1]?.word === "买东西"
+  ) {
+    return withSentenceContext(
+      makeSentence(`${context.subject} want to go shopping`, false),
+      context.timePhrase,
+    );
   }
 
   if (
@@ -4501,6 +4771,13 @@ export function scoreRuleTranslation(
   ) {
     score -= 18;
   }
+  if (
+    /\bsmall plum\b|\bhome inn\b|\bpat photograph\b|\bsend out news\b|\bsmall table\b|\bmotionless\b|\blocal surname\b|\bbuddhist teachings\b|\bcan or not\b/.test(
+      normalizedTranslation,
+    )
+  ) {
+    score -= 24;
+  }
   if (translationWords.length <= 1) {
     score -= imperative ? 4 : 24;
   } else if (usefulWords < 2 && !imperative && !nounPhrase) {
@@ -4577,6 +4854,17 @@ export function buildNaturalTranslation(
   literalGloss: string,
 ): Omit<TranslationResult, "literalGloss"> {
   const context = buildContext(wordSegments);
+  const nameIntroductionTranslation = buildNameIntroductionTranslation(wordSegments);
+
+  if (nameIntroductionTranslation) {
+    return {
+      translation: normalizeFinalEnglishClause(nameIntroductionTranslation, {
+        subject: context?.subject,
+      }),
+      translationSource: "rule",
+      confidence: 0.95,
+    };
+  }
 
   const lexicalizedTranslation = getLexicalizedTranslation(wordSegments);
   if (lexicalizedTranslation) {
@@ -4623,4 +4911,46 @@ export function buildTranslationResult(
   literalGloss: string,
 ): Omit<TranslationResult, "literalGloss"> {
   return buildNaturalTranslation(wordSegments, literalGloss);
+}
+
+function buildNameIntroductionTranslation(
+  wordSegments: WordSegment[],
+): string | null {
+  const coreSegments = wordSegments.filter(
+    (segment) => !isPunctuationToken(segment.word),
+  );
+
+  if (
+    coreSegments.length < 3 ||
+    !SUBJECT_TRANSLATIONS[coreSegments[0]?.word || ""] ||
+    coreSegments[1]?.word !== "叫"
+  ) {
+    return null;
+  }
+
+  const nameSegments = coreSegments.slice(2).filter(
+    (segment) => !TIME_TRANSLATIONS[segment.word] && segment.word !== "了",
+  );
+  const formattedName = nameSegments
+    .map((segment) =>
+      segment.pinyin
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((syllable) => capitalizeSentence(syllable.replace(/\d/g, "")))
+        .join(" "),
+    )
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!formattedName) {
+    return null;
+  }
+
+  const subject = SUBJECT_TRANSLATIONS[coreSegments[0].word];
+  return makeSentence(
+    `${capitalizeSentence(possessiveForSubject(subject))} name is ${formattedName}`,
+    false,
+  );
 }

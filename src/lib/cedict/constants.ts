@@ -40,6 +40,9 @@ export const OBJECT_TRANSLATIONS: Record<string, string> = {
   事情: "matter",
   老师: "teacher",
   学生: "student",
+  电影: "movie",
+  消息: "message",
+  文件: "document",
   中文: "Chinese",
   汉语: "Chinese",
   汉文: "Chinese",
@@ -118,6 +121,7 @@ export const ADVERB_TRANSLATIONS: Record<string, string> = {
   也: "also",
   都: "all",
   还: "still",
+  以前: "before",
   先: "first",
   再: "then",
   快: "quickly",
@@ -259,11 +263,13 @@ export const VERB_TRANSLATIONS: Record<string, string> = {
   拿: "hold",
   记: "remember",
   写: "write",
+  发: "send",
   放: "put",
   开: "open",
   关: "close",
   送: "send",
   送给: "give",
+  拍: "take",
   带: "bring",
   帮: "help",
   聊: "chat",
@@ -279,6 +285,7 @@ export const VERB_TRANSLATIONS: Record<string, string> = {
   休息: "rest",
   让: "let",
   担心: "worry",
+  打折: "be on sale",
   批评: "criticize",
   骗: "deceive",
   打开: "open",
@@ -597,6 +604,10 @@ export const DYNAMIC_PASSIVE_PARTICIPLES = new Set([
 
 export const PROGRESSIVE_MARKERS = new Set(["在", "正在"]);
 
+export const COUNTRY_ADJECTIVE_TRANSLATIONS: Record<string, string> = {
+  中国: "Chinese",
+};
+
 export const LEXICALIZED_EXPRESSION_TRANSLATIONS: Record<string, string> = {
   你好: "Hello.",
   您好: "Hello.",
@@ -635,8 +646,10 @@ export const SKIPPABLE_TOKENS = new Set([
 ]);
 
 export const MEASURE_WORDS = new Set([
+  "家",
   "个",
   "本",
+  "部",
   "张",
   "只",
   "位",
@@ -645,11 +658,13 @@ export const MEASURE_WORDS = new Set([
   "碗",
   "块",
   "件",
+  "段",
   "些",
 ]);
 
 export const NUMBER_TRANSLATIONS: Record<string, string> = {
   一: "one",
+  几: "a few",
   二: "two",
   两: "two",
   三: "three",
@@ -665,14 +680,19 @@ export const NUMBER_TRANSLATIONS: Record<string, string> = {
 export const NOUN_TRANSLATIONS: Record<string, string> = {
   人: "person",
   书: "book",
+  文章: "article",
+  课文: "text",
   门: "door",
   公司: "company",
   照片: "photo",
+  电影: "movie",
   饭: "meal",
   信: "letter",
   时间: "time",
   名字: "name",
   音乐: "music",
+  文件: "document",
+  消息: "message",
   问题: "question",
   北京: "Beijing",
   中国: "China",
@@ -680,10 +700,12 @@ export const NOUN_TRANSLATIONS: Record<string, string> = {
   事情: "matter",
   老师: "teacher",
   学生: "student",
+  姐姐: "older sister",
   字: "character",
   说法: "expression",
   礼物: "gift",
   地方: "place",
+  店: "store",
   衣服: "clothing",
   箱子: "box",
   空: "time",

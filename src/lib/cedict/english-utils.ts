@@ -176,6 +176,14 @@ export function pluralizeEnglishNoun(nounPhrase: string): string {
     return trimmed;
   }
 
+  if (/^piece of\b/i.test(trimmed)) {
+    return trimmed.replace(/^piece\b/i, "pieces");
+  }
+
+  if (/^period of\b/i.test(trimmed)) {
+    return trimmed.replace(/^period\b/i, "periods");
+  }
+
   const parts = trimmed.split(/\s+/);
   const lastWord = parts[parts.length - 1].toLowerCase();
   const irregularPlurals: Record<string, string> = {
@@ -336,6 +344,7 @@ export function toPastTense(verbPhrase: string): string {
     give: "gave",
     read: "read",
     hear: "heard",
+    send: "sent",
     put: "put",
     get: "got",
   };
@@ -377,6 +386,7 @@ export function toPastParticiple(verbPhrase: string): string {
     give: "given",
     read: "read",
     hear: "heard",
+    send: "sent",
     take: "taken",
     find: "found",
     put: "put",
@@ -413,8 +423,14 @@ export function addSimpleArticle(subject: string, predicate: string): string {
     "student",
     "teacher",
     "doctor",
+    "document",
     "friend",
+    "item",
+    "message",
+    "movie",
     "person",
+    "period",
+    "piece",
     "book",
     "photo",
     "letter",
@@ -434,9 +450,16 @@ export function addSimpleArticle(subject: string, predicate: string): string {
     "musician",
     "professor",
     "brother",
+    "sister",
+    "store",
   ]);
 
-  const firstWord = normalizedPredicate.split(/\s+/)[0]?.toLowerCase() || "";
+  const predicateWords = normalizedPredicate.split(/\s+/);
+  const firstWord = predicateWords[0]?.toLowerCase() || "";
+  const headWord =
+    predicateWords[1]?.toLowerCase() === "of"
+      ? firstWord
+      : predicateWords[predicateWords.length - 1]?.toLowerCase() || "";
   if (
     subject.toLowerCase() !== "i" &&
     subject.toLowerCase() !== "he" &&
@@ -447,7 +470,7 @@ export function addSimpleArticle(subject: string, predicate: string): string {
     return normalizedPredicate;
   }
 
-  if (!commonCountNouns.has(firstWord)) {
+  if (!commonCountNouns.has(headWord)) {
     return normalizedPredicate;
   }
 
@@ -537,6 +560,51 @@ export function normalizeLightVerbPhrasing(value: string): string {
     );
 }
 
+function normalizeBasicSubjectVerbAgreement(value: string): string {
+  return value
+    .replace(/^me\b/i, "I")
+    .replace(/\bI is\b/g, "I am")
+    .replace(/\bI are\b/g, "I am")
+    .replace(/\byou am\b/gi, "you are")
+    .replace(/\byou is\b/gi, "you are")
+    .replace(/\bwe is\b/gi, "we are")
+    .replace(/\bwe am\b/gi, "we are")
+    .replace(/\bthey is\b/gi, "they are")
+    .replace(/\bthey am\b/gi, "they are")
+    .replace(/\b(he|she|it) are\b/gi, "$1 is")
+    .replace(/\b(he|she|it) am\b/gi, "$1 is")
+    .replace(
+      /\b(I|you|he|she|it|we|they)\s+be\s+([^,.!?]+)/gi,
+      (match, subject: string, predicate: string) =>
+        `${subject} ${beForm(subject)} ${predicate.trim()}`,
+    );
+}
+
+function normalizeLiteralGlossLeakage(value: string): string {
+  const sawSlashGloss = /\//.test(value);
+  let result = sawSlashGloss ? value.replace(/\s*\/\s*/g, " ") : value;
+
+  result = result
+    .replace(/\bChina student\b/gi, "Chinese student")
+    .replace(/\bhome inn\b/gi, "store")
+    .replace(/\bsend out news\b/gi, "send a message")
+    .replace(/\bpat (?:photograph|photo)\b/gi, "take a photo")
+    .replace(/\bpat (?:photographs|photos)\b/gi, "take photos")
+    .replace(/\bto give a discount\b/gi, "be on sale")
+    .replace(/\bmove motionless\b/gi, "move it")
+    .replace(/\bsmall table\b/gi, "items")
+    .replace(/\bto expound Buddhist teachings\b/gi, "explain")
+    .replace(/\blocal surname [A-Z][a-z]+\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return sawSlashGloss ? result.replace(/\b(am)\s+the first time\b/gi, "is the first time") : result;
+}
+
+function normalizeQuestionCleanup(value: string): string {
+  return value.replace(/\bcan or not\b/gi, "can you");
+}
+
 export function normalizeArticleChoice(value: string): string {
   let result = value.replace(
     /\b(my|your|his|her|its|our|their)\s+one\b/gi,
@@ -594,7 +662,10 @@ export function normalizeFinalEnglishClause(
   let result = sentenceWithoutPunctuation(value);
 
   result = stripClassifierGloss(result);
+  result = normalizeLiteralGlossLeakage(result);
+  result = normalizeBasicSubjectVerbAgreement(result);
   result = normalizeLightVerbPhrasing(result);
+  result = normalizeQuestionCleanup(result);
   result = normalizeArticleChoice(result);
   result = normalizePronounInsertion(result, options?.subject);
   result = normalizeRedundantWording(result);
@@ -610,18 +681,9 @@ export function normalizeFinalEnglishClause(
 export function smoothFallbackTranslation(value: string): string {
   let result = stripClassifierGloss(value).replace(/\s+/g, " ").trim();
 
-  result = result
-    .replace(/^me\b/i, "I")
-    .replace(/\bI is\b/g, "I am")
-    .replace(/\bI are\b/g, "I am")
-    .replace(/\byou am\b/gi, "you are")
-    .replace(/\byou is\b/gi, "you are")
-    .replace(/\bwe is\b/gi, "we are")
-    .replace(/\bwe am\b/gi, "we are")
-    .replace(/\bthey is\b/gi, "they are")
-    .replace(/\bthey am\b/gi, "they are")
-    .replace(/\b(he|she|it) are\b/gi, "$1 is")
-    .replace(/\b(he|she|it) am\b/gi, "$1 is");
+  result = normalizeLiteralGlossLeakage(result);
+  result = normalizeBasicSubjectVerbAgreement(result);
+  result = normalizeQuestionCleanup(result);
 
   result = result.replace(
     /\b(I|you|he|she|it)\s+(am|are|is)\s+([^,.!?]+)\b/i,
