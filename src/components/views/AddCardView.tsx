@@ -7,7 +7,6 @@ import {
   Pencil,
   Sparkles,
   Trash2,
-  Wand2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -263,7 +262,6 @@ export default function AddCardView({
   const [authoringMode, setAuthoringMode] = useState<"word" | "sentence">(
     "word",
   );
-  const [showDeckOptions, setShowDeckOptions] = useState(false);
 
   const analysisPreview = useMemo(() => {
     if (!sentenceAnalysis) return null;
@@ -292,45 +290,42 @@ export default function AddCardView({
     <div className="space-y-6">
       <Card className="border-slate-700/80 bg-gradient-to-b from-white/5 via-slate-900/70 to-slate-900/45 shadow-[0_18px_50px_rgba(0,0,0,0.24)]">
         <CardHeader className="space-y-4 pb-2">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <CardTitle className="text-xl text-slate-50 md:text-2xl">
-              {currentDeck.name}
-            </CardTitle>
-            <div className="space-y-2 self-start">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300">
+                <span className="uppercase tracking-[0.22em] text-slate-500">
+                  Deck
+                </span>
+                <span className="text-slate-100">{currentDeck.name}</span>
+              </div>
+              <CardTitle className="text-xl text-slate-50 md:text-2xl">
+                Add Card
+              </CardTitle>
+            </div>
+
+            <div className="inline-flex w-fit rounded-2xl border border-white/10 bg-slate-950/80 p-1.5">
               <button
                 type="button"
-                onClick={() => setShowDeckOptions((prev) => !prev)}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
+                onClick={() => setAuthoringMode("word")}
+                className={`rounded-xl px-4 py-2 text-sm transition-colors ${
+                  authoringMode === "word"
+                    ? "bg-blue-500 text-slate-950"
+                    : "text-slate-300 hover:bg-white/[0.06]"
+                }`}
               >
-                Deck
-                <span className="text-slate-100">{currentDeck.name}</span>
+                Word
               </button>
-              {showDeckOptions && (
-                <div className="flex gap-2 rounded-2xl border border-white/10 bg-slate-950/85 p-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setAuthoringMode("word")}
-                    className={`rounded-xl px-3 py-2 text-sm transition-colors ${
-                      authoringMode === "word"
-                        ? "bg-blue-500 text-slate-950"
-                        : "text-slate-300 hover:bg-white/[0.06]"
-                    }`}
-                  >
-                    Single Word
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAuthoringMode("sentence")}
-                    className={`rounded-xl px-3 py-2 text-sm transition-colors ${
-                      authoringMode === "sentence"
-                        ? "bg-blue-500 text-slate-950"
-                        : "text-slate-300 hover:bg-white/[0.06]"
-                    }`}
-                  >
-                    Sentence
-                  </button>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => setAuthoringMode("sentence")}
+                className={`rounded-xl px-4 py-2 text-sm transition-colors ${
+                  authoringMode === "sentence"
+                    ? "bg-blue-500 text-slate-950"
+                    : "text-slate-300 hover:bg-white/[0.06]"
+                }`}
+              >
+                Sentence
+              </button>
             </div>
           </div>
         </CardHeader>
@@ -338,10 +333,6 @@ export default function AddCardView({
         <CardContent className="space-y-6 md:space-y-7">
           {authoringMode === "word" && (
             <section className="space-y-5 rounded-2xl border border-white/8 bg-slate-950/35 p-4 md:p-5">
-              <h3 className="text-base font-semibold text-slate-100">
-                Single Character
-              </h3>
-
               <div className="grid gap-4 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
                 <div className="space-y-2.5">
                   <Label htmlFor="charInput" className="text-sm text-slate-200">
@@ -359,7 +350,10 @@ export default function AddCardView({
                 </div>
 
                 <div className="space-y-2.5">
-                  <Label htmlFor="pinyinInput" className="text-sm text-slate-200">
+                  <Label
+                    htmlFor="pinyinInput"
+                    className="text-sm text-slate-200"
+                  >
                     Pinying
                   </Label>
                   <Input
@@ -380,7 +374,10 @@ export default function AddCardView({
               </div>
 
               <div className="space-y-2.5">
-                <Label htmlFor="meaningInput" className="text-sm text-slate-200">
+                <Label
+                  htmlFor="meaningInput"
+                  className="text-sm text-slate-200"
+                >
                   Meaning
                 </Label>
                 <Input
@@ -400,14 +397,14 @@ export default function AddCardView({
                   size="sm"
                   onClick={() => void onAutoFetch()}
                   disabled={isAutoFetching || !formState.front.trim()}
-                  className="border-purple-400/25 bg-purple-500/8 text-purple-200 hover:bg-purple-500/15 focus-visible:border-purple-300/60"
+                  className="border-blue-400/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/18 focus-visible:border-blue-300/60"
                 >
                   {isAutoFetching ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <Sparkles className="mr-2 h-4 w-4" />
                   )}
-                  Auto-fill
+                  Translate
                 </Button>
               </div>
             </section>
@@ -415,13 +412,12 @@ export default function AddCardView({
 
           {authoringMode === "sentence" && (
             <section className="space-y-5 rounded-2xl border border-white/8 bg-slate-950/35 p-4 md:p-5">
-              <h3 className="text-base font-semibold text-slate-100">
-                Chinese Sentence
-              </h3>
-
               <div className="grid gap-4 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
                 <div className="space-y-2.5">
-                  <Label htmlFor="exampleInput" className="text-sm text-slate-200">
+                  <Label
+                    htmlFor="exampleInput"
+                    className="text-sm text-slate-200"
+                  >
                     Chinese Sentence
                   </Label>
                   <Textarea
@@ -431,8 +427,8 @@ export default function AddCardView({
                       onFormChange({ example: event.target.value })
                     }
                     placeholder="你好吗？"
-                    className="min-h-24 border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
-                    rows={3}
+                    className="h-13 resize-y border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
+                    rows={1}
                   />
                 </div>
 
@@ -489,9 +485,9 @@ export default function AddCardView({
                   {isAnalyzingSentence ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    <Wand2 className="mr-2 h-4 w-4" />
+                    <Sparkles className="mr-2 h-4 w-4" />
                   )}
-                  Analyze
+                  Translate
                 </Button>
               </div>
 
@@ -575,10 +571,7 @@ export default function AddCardView({
             </section>
           )}
 
-          <div className="flex flex-col-reverse gap-3 border-t border-white/8 pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs leading-5 text-slate-500">
-              Clear resets this form.
-            </p>
+          <div className="flex justify-end border-t border-white/8 pt-5">
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 variant="outline"
@@ -610,7 +603,8 @@ export default function AddCardView({
         <CardContent>
           {cardsInDeck.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/35 p-5 text-sm text-slate-400">
-              No cards in this deck yet. Add your first card above to start building a study set.
+              No cards in this deck yet. Add your first card above to start
+              building a study set.
             </div>
           ) : (
             <div className="max-h-[360px] space-y-3 overflow-y-auto pr-1">
