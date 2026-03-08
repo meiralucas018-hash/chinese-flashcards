@@ -91,6 +91,120 @@ export function makeSentence(text: string, isQuestion: boolean): string {
   return `${withoutPunctuation}${isQuestion ? "?" : "."}`;
 }
 
+export type QuestionAuxiliaryType = "be" | "do" | "modal" | "have";
+
+type QuestionOptions = {
+  modal?: string;
+  subjectOverride?: string;
+  forceBareVerb?: boolean;
+};
+
+type EmbeddedClauseParts = {
+  subject?: string;
+  verb?: string;
+  object?: string;
+  copulaPredicate?: string;
+  modal?: string;
+  infinitive?: boolean;
+};
+
+function normalizeQuestionWord(whWord: string): string {
+  return capitalizeSentence(whWord.trim().toLowerCase() || "what");
+}
+
+function normalizedSubject(subject: string, subjectOverride?: string): string {
+  return (subjectOverride || subject).trim().toLowerCase() || subject.trim();
+}
+
+export function normalizeClauseOrder(text: string): string {
+  let normalized = text.replace(/\s+/g, " ").trim();
+
+  normalized = normalized
+    .replace(/\b(is|are|am|do|does|did|can|could|should|would|will|to)\s+\1\b/gi, "$1")
+    .replace(/\b(what|where|why|how)\s+is\s+you\b/gi, "$1 are you")
+    .replace(/\b(what|where|why|how)\s+are\s+i\b/gi, "$1 am I")
+    .replace(/\b(why|what|where|how)\s+you\b/gi, "$1 do you")
+    .replace(/\bwhat\s+([^\s]+)\s+(do|does|did)\s+([^\s]+)\b/gi, "what $2 $3 $1")
+    .replace(/\s+([,.;!?])/g, "$1")
+    .replace(/([,.;!?])(\S)/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return normalized;
+}
+
+export function buildYesNoQuestion(
+  subject: string,
+  auxiliaryType: QuestionAuxiliaryType,
+  predicateOrVerbPhrase: string,
+  options?: QuestionOptions,
+): string {
+  const subjectText = normalizedSubject(subject, options?.subjectOverride);
+  const predicate = predicateOrVerbPhrase.trim();
+
+  const clause =
+    auxiliaryType === "be"
+      ? `${beForm(subject)} ${subjectText} ${predicate}`
+      : auxiliaryType === "modal"
+        ? `${options?.modal || "can"} ${subjectText} ${predicate}`
+        : auxiliaryType === "have"
+          ? `${haveForm(subject)} ${subjectText} ${predicate}`
+          : `${doAux(subject)} ${subjectText} ${predicate}`;
+
+  return makeSentence(normalizeClauseOrder(clause), true);
+}
+
+export function buildWhQuestion(
+  whWord: string,
+  subject: string,
+  auxiliaryType: QuestionAuxiliaryType,
+  verb: string,
+  objectPhrase?: string,
+  options?: QuestionOptions,
+): string {
+  const wh = normalizeQuestionWord(whWord);
+  const subjectText = normalizedSubject(subject, options?.subjectOverride);
+  const object = objectPhrase?.trim() || "";
+  const verbText = (options?.forceBareVerb ? verb : verb.trim()).trim();
+
+  const tail = [verbText, object].filter(Boolean).join(" ");
+  const clause =
+    auxiliaryType === "be"
+      ? `${wh} ${beForm(subject)} ${subjectText} ${tail}`
+      : auxiliaryType === "modal"
+        ? `${wh} ${options?.modal || "can"} ${subjectText} ${tail}`
+        : auxiliaryType === "have"
+          ? `${wh} ${haveForm(subject)} ${subjectText} ${tail}`
+          : `${wh} ${doAux(subject)} ${subjectText} ${tail}`;
+
+  return makeSentence(normalizeClauseOrder(clause), true);
+}
+
+export function buildEmbeddedWhClause(
+  whWord: string,
+  clauseParts: EmbeddedClauseParts,
+): string {
+  const wh = whWord.trim().toLowerCase() || "what";
+  const subject = clauseParts.subject?.trim().toLowerCase() || "it";
+  const object = clauseParts.object?.trim() || "";
+  const verb = clauseParts.verb?.trim() || "";
+
+  let clause = "";
+  if (clauseParts.infinitive && verb) {
+    clause = `${wh} to ${[verb, object].filter(Boolean).join(" ")}`;
+  } else if (clauseParts.copulaPredicate) {
+    clause = `${wh} ${subject} ${beForm(subject)} ${clauseParts.copulaPredicate.trim()}`;
+  } else if (clauseParts.modal && verb) {
+    clause = `${wh} ${subject} ${clauseParts.modal} ${[verb, object].filter(Boolean).join(" ")}`;
+  } else if (verb) {
+    clause = `${wh} ${subject} ${conjugateVerb(subject, verb)} ${object}`;
+  } else {
+    clause = `${wh} ${subject}`;
+  }
+
+  return normalizeClauseOrder(clause);
+}
+
 export function toGerund(verbPhrase: string): string {
   const [firstWord, ...rest] = verbPhrase.trim().split(/\s+/);
   if (!firstWord) {

@@ -12,6 +12,9 @@ import {
 import {
   addSimpleArticle,
   beForm,
+  buildEmbeddedWhClause,
+  buildWhQuestion,
+  buildYesNoQuestion,
   capitalizeSentence,
   conjugateVerb,
   doAux,
@@ -20,6 +23,7 @@ import {
   isPunctuationToken,
   isQuestionMarkToken,
   makeSentence,
+  normalizeClauseOrder,
   possessiveForSubject,
   toGerund,
   toPastParticiple,
@@ -275,11 +279,11 @@ function buildAdjectiveSentence(
   adverbs: string[],
 ): string {
   const clause = isQuestion
-    ? `${capitalizeSentence(beForm(subject))} ${subject.toLowerCase()} ${predicate}`
+    ? buildYesNoQuestion(subject, "be", predicate).replace(/[?.!]$/, "")
     : `${subject} ${beForm(subject)} ${predicate}`;
 
   return makeSentence(
-    applyAdverbsToClause(clause, subject, adverbs),
+    normalizeClauseOrder(applyAdverbsToClause(clause, subject, adverbs)),
     isQuestion,
   );
 }
@@ -291,10 +295,7 @@ function buildBeSentence(
 ): string {
   const normalizedPredicate = addSimpleArticle(subject, predicate);
   if (isQuestion) {
-    return makeSentence(
-      `${capitalizeSentence(beForm(subject))} ${subject.toLowerCase()} ${normalizedPredicate}`,
-      true,
-    );
+    return buildYesNoQuestion(subject, "be", normalizedPredicate);
   }
 
   return makeSentence(
@@ -338,10 +339,7 @@ function buildLocationSentence(
   const location = formatLocationPhrase(locationPhrase, "static");
 
   if (isQuestion) {
-    return makeSentence(
-      `${capitalizeSentence(beForm(subject))} ${subject.toLowerCase()} ${location}`,
-      true,
-    );
+    return buildYesNoQuestion(subject, "be", location);
   }
   if (isNegative) {
     return makeSentence(`${subject} ${beForm(subject)} not ${location}`, false);
@@ -359,11 +357,11 @@ function buildProgressiveSentence(
 ): string {
   const progressiveAction = toGerund(actionPhrase);
   const clause = isQuestion
-    ? `${capitalizeSentence(beForm(subject))} ${subject.toLowerCase()} ${progressiveAction}`
+    ? buildYesNoQuestion(subject, "be", progressiveAction).replace(/[?.!]$/, "")
     : `${subject} ${beForm(subject)}${isNegative ? " not" : ""} ${progressiveAction}`;
 
   return makeSentence(
-    applyAdverbsToClause(clause, subject, adverbs),
+    normalizeClauseOrder(applyAdverbsToClause(clause, subject, adverbs)),
     isQuestion,
   );
 }
@@ -538,10 +536,9 @@ function buildVerbSentence(
 ): string {
   if (verb === "can") {
     if (isQuestion) {
-      return makeSentence(
-        `Can ${subject.toLowerCase()} ${objectPhrase}`.trim(),
-        true,
-      );
+      return buildYesNoQuestion(subject, "modal", objectPhrase, {
+        modal: "can",
+      });
     }
     if (isNegative) {
       return makeSentence(`${subject} cannot ${objectPhrase}`.trim(), false);
@@ -551,10 +548,11 @@ function buildVerbSentence(
   }
 
   if (verb === "be called") {
-    return makeSentence(
-      `${subject} is called ${objectPhrase}`.trim(),
-      isQuestion,
-    );
+    if (isQuestion) {
+      return buildYesNoQuestion(subject, "be", `called ${objectPhrase}`.trim());
+    }
+
+    return makeSentence(`${subject} is called ${objectPhrase}`.trim(), false);
   }
 
   if (verb === "want" || verb === "like") {
@@ -562,9 +560,10 @@ function buildVerbSentence(
       objectIsVerbPhrase && objectPhrase ? `to ${objectPhrase}` : objectPhrase;
 
     if (isQuestion) {
-      return makeSentence(
-        `${capitalizeSentence(doAux(subject))} ${subject.toLowerCase()} ${verb} ${actionOrObject}`.trim(),
-        true,
+      return buildYesNoQuestion(
+        subject,
+        "do",
+        `${verb} ${actionOrObject}`.trim(),
       );
     }
     if (isNegative) {
@@ -591,10 +590,7 @@ function buildVerbSentence(
   }
 
   if (isQuestion) {
-    return makeSentence(
-      `${capitalizeSentence(doAux(subject))} ${subject.toLowerCase()} ${verb} ${objectPhrase}`.trim(),
-      true,
-    );
+    return buildYesNoQuestion(subject, "do", `${verb} ${objectPhrase}`.trim());
   }
   if (isNegative) {
     return makeSentence(
@@ -633,10 +629,7 @@ function buildQuestionWordSentence(
   }
 
   if (head === "是" || head === "在") {
-    return makeSentence(
-      `${translatedQuestion} ${beForm(subject)} ${subject.toLowerCase()}`,
-      true,
-    );
+    return buildWhQuestion(translatedQuestion, subject, "be", "");
   }
 
   const verb = VERB_TRANSLATIONS[head];
@@ -644,10 +637,36 @@ function buildQuestionWordSentence(
     return null;
   }
 
-  return makeSentence(
-    `${translatedQuestion} ${doAux(subject)} ${subject.toLowerCase()} ${verb} ${translatePhrase(tail, true)}`.trim(),
-    true,
+  if (verb === "can") {
+    return buildWhQuestion(
+      translatedQuestion,
+      subject,
+      "modal",
+      "",
+      translatePhrase(tail, true),
+      { modal: "can" },
+    );
+  }
+
+  return buildWhQuestion(
+    translatedQuestion,
+    subject,
+    "do",
+    verb,
+    translatePhrase(tail, true),
   );
+}
+
+function toInfinitiveActionPhrase(value: string): string {
+  const normalized = value.trim();
+  if (!normalized) {
+    return "do it";
+  }
+  if (/^(do|say|make|write|read|call|use|study|work|learn|speak)$/i.test(normalized)) {
+    return `${normalized} it`;
+  }
+
+  return normalized.replace(/^to\s+/i, "");
 }
 
 function buildEmbeddedQuestionSentence(
@@ -655,6 +674,15 @@ function buildEmbeddedQuestionSentence(
   verb: string,
   tail: RuleToken[],
 ): string | null {
+  // Target fixtures for iteration 3:
+  // 你为什么学中文 | 你在哪儿工作 | 你叫什么名字
+  // 他给谁打电话 | 你想怎么做 | 你会不会说中文 | 这本书是谁的
+  // Expected shape examples:
+  // - Why do you study Chinese?
+  // - Where do you work?
+  // - What is your name?
+  // - Who does he call on the phone?
+  // - How do you want to do it?
   const questionIndex = findQuestionWordIndex(tail);
   if (questionIndex === -1) {
     return null;
@@ -670,60 +698,72 @@ function buildEmbeddedQuestionSentence(
       tail.some((token) => token.word === "名字")
     ) {
       return makeSentence(
-        `What is ${possessiveForSubject(subject)} name`,
+        normalizeClauseOrder(`What is ${possessiveForSubject(subject)} name`),
         true,
       );
     }
 
-    return makeSentence(`What is ${subject.toLowerCase()} called`, true);
+    return buildWhQuestion("what", subject, "be", "called");
   }
 
   if (LOCATION_QUESTION_WORDS.has(questionWord)) {
-    if (verb === "live" || verb === "work" || verb === "stay") {
-      return makeSentence(
-        `Where ${beForm(subject)} ${subject.toLowerCase()}`,
-        true,
-      );
-    }
-
-    return makeSentence(
-      `Where ${doAux(subject)} ${subject.toLowerCase()} ${verb} ${before}`.trim(),
-      true,
-    );
+    return buildWhQuestion("where", subject, "do", verb, before);
   }
 
   if (questionWord === "什么") {
-    if (after) {
-      return makeSentence(
-        `What ${after} ${doAux(subject)} ${subject.toLowerCase()} ${verb} ${before}`.trim(),
-        true,
-      );
-    }
-
-    return makeSentence(
-      `What ${doAux(subject)} ${subject.toLowerCase()} ${verb} ${before}`.trim(),
-      true,
+    return buildWhQuestion(
+      "what",
+      subject,
+      verb === "can" ? "modal" : "do",
+      verb === "can" ? "" : verb,
+      [before, after].filter(Boolean).join(" "),
+      verb === "can" ? { modal: "can" } : undefined,
     );
   }
 
   if (questionWord === "谁") {
-    return makeSentence(
-      `Who ${doAux(subject)} ${subject.toLowerCase()} ${verb} ${before} ${after}`.trim(),
-      true,
+    return buildWhQuestion(
+      "who",
+      subject,
+      verb === "can" ? "modal" : "do",
+      verb === "can" ? "" : verb,
+      [before, after].filter(Boolean).join(" "),
+      verb === "can" ? { modal: "can" } : undefined,
     );
   }
 
   if (questionWord === "怎么") {
-    return makeSentence(
-      `How ${doAux(subject)} ${subject.toLowerCase()} ${verb} ${[before, after].filter(Boolean).join(" ")}`.trim(),
-      true,
+    if (verb === "want" || verb === "like") {
+      const actionPhrase = [before, after].filter(Boolean).join(" ").trim();
+      const normalizedAction = toInfinitiveActionPhrase(actionPhrase);
+      const [embeddedVerb, ...embeddedTail] = normalizedAction.split(/\s+/);
+      const embedded = buildEmbeddedWhClause("how", {
+        verb: embeddedVerb || "do",
+        object: embeddedTail.join(" "),
+        infinitive: true,
+      }).replace(/^how\s+/i, "");
+
+      return buildWhQuestion("how", subject, "do", verb, embedded);
+    }
+
+    return buildWhQuestion(
+      "how",
+      subject,
+      verb === "can" ? "modal" : "do",
+      verb === "can" ? "" : verb,
+      [before, after].filter(Boolean).join(" "),
+      verb === "can" ? { modal: "can" } : undefined,
     );
   }
 
   if (questionWord === "为什么") {
-    return makeSentence(
-      `Why ${doAux(subject)} ${subject.toLowerCase()} ${verb} ${[before, after].filter(Boolean).join(" ")}`.trim(),
-      true,
+    return buildWhQuestion(
+      "why",
+      subject,
+      verb === "can" ? "modal" : "do",
+      verb === "can" ? "" : verb,
+      [before, after].filter(Boolean).join(" "),
+      verb === "can" ? { modal: "can" } : undefined,
     );
   }
 
@@ -1096,19 +1136,13 @@ function matchGeiRule(context: RuleContext): string | null {
     const actionVerb = VERB_TRANSLATIONS[actionTokens[0]?.word || ""];
     if (actionVerb === "call") {
       return withSentenceContext(
-        makeSentence(
-          `Who ${doAux(context.subject)} ${context.subject.toLowerCase()} call on the phone`,
-          true,
-        ),
+        buildWhQuestion("who", context.subject, "do", "call", "on the phone"),
         context.timePhrase,
       );
     }
     if (actionVerb) {
       return withSentenceContext(
-        makeSentence(
-          `Who ${doAux(context.subject)} ${context.subject.toLowerCase()} ${actionVerb}`,
-          true,
-        ),
+        buildWhQuestion("who", context.subject, "do", actionVerb),
         context.timePhrase,
       );
     }
@@ -1374,10 +1408,7 @@ function matchVerbRule(context: RuleContext): string | null {
     (context.tail[1]?.word === "哪里" || context.tail[1]?.word === "哪儿")
   ) {
     return withSentenceContext(
-      makeSentence(
-        `Where ${doAux(context.subject)} ${context.subject.toLowerCase()} ${verb}`,
-        true,
-      ),
+      buildWhQuestion("where", context.subject, "do", verb),
       context.timePhrase,
     );
   }
@@ -1388,9 +1419,12 @@ function matchVerbRule(context: RuleContext): string | null {
     context.coreTokens[1]?.word === "为什么"
   ) {
     return withSentenceContext(
-      makeSentence(
-        `Why ${doAux(context.subject)} ${context.subject.toLowerCase()} study ${translatePhrase(context.tail, true)}`,
-        true,
+      buildWhQuestion(
+        "why",
+        context.subject,
+        "do",
+        "study",
+        translatePhrase(context.tail, true),
       ),
       context.timePhrase,
     );
