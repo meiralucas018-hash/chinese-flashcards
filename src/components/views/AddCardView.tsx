@@ -1,4 +1,10 @@
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Check,
   CircleHelp,
@@ -74,6 +80,52 @@ type EditableCardPatch = Pick<
   "front" | "pinyin" | "meaning" | "example"
 > &
   Partial<Pick<CardType, "exampleBreakdown" | "usageExamples">>;
+
+interface GeneratedWordPreview {
+  front: string;
+  pinyin: string;
+  meaning: string;
+}
+
+function WorkflowActionPanel({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description: string;
+  action: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-white/8 bg-white/[0.025] p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-slate-200">{title}</p>
+        <p className="text-xs leading-5 text-slate-500">{description}</p>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function ValueSourceBadge({
+  isGenerated,
+  generatedLabel,
+}: {
+  isGenerated: boolean;
+  generatedLabel: string;
+}) {
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-[11px] ${
+        isGenerated
+          ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
+          : "border border-white/10 bg-white/[0.05] text-slate-300"
+      }`}
+    >
+      {isGenerated ? generatedLabel : "Custom value"}
+    </span>
+  );
+}
 
 function EditableCardRow({
   card,
@@ -262,6 +314,10 @@ export default function AddCardView({
   const [authoringMode, setAuthoringMode] = useState<"word" | "sentence">(
     "word",
   );
+  const [pendingWordLookup, setPendingWordLookup] =
+    useState<GeneratedWordPreview | null>(null);
+  const [wordLookupPreview, setWordLookupPreview] =
+    useState<GeneratedWordPreview | null>(null);
 
   const analysisPreview = useMemo(() => {
     if (!sentenceAnalysis) return null;
@@ -273,7 +329,18 @@ export default function AddCardView({
   const analyzedPinyin = analysisPreview?.pinyin || formState.examplePinyin;
   const analyzedTranslation =
     analysisPreview?.translation || formState.exampleTranslation;
+  const activeWordPreview =
+    wordLookupPreview && wordLookupPreview.front === formState.front.trim()
+      ? wordLookupPreview
+      : null;
+  const hasWordDraft = formState.front.trim().length > 0;
   const hasSentenceDraft = formState.example.trim().length > 0;
+  const savedWordPinyinIsGenerated =
+    Boolean(activeWordPreview) &&
+    formState.pinyin.trim() === (activeWordPreview?.pinyin || "").trim();
+  const savedWordMeaningIsGenerated =
+    Boolean(activeWordPreview) &&
+    formState.meaning.trim() === (activeWordPreview?.meaning || "").trim();
   const savedSentencePinyinIsGenerated =
     Boolean(analysisPreview) &&
     formState.examplePinyin.trim() === (analysisPreview?.pinyin || "").trim();
@@ -281,6 +348,59 @@ export default function AddCardView({
     Boolean(analysisPreview) &&
     formState.exampleTranslation.trim() ===
       (analysisPreview?.translation || "").trim();
+
+  const finalizePendingWordLookup = useEffectEvent(() => {
+    if (!pendingWordLookup) {
+      return;
+    }
+
+    const trimmedFront = formState.front.trim();
+    if (trimmedFront !== pendingWordLookup.front) {
+      setPendingWordLookup(null);
+      return;
+    }
+
+    const nextPinyin = formState.pinyin.trim();
+    const nextMeaning = formState.meaning.trim();
+    const lookupChanged =
+      nextPinyin !== pendingWordLookup.pinyin ||
+      nextMeaning !== pendingWordLookup.meaning;
+
+    if (lookupChanged || wordLookupPreview?.front === pendingWordLookup.front) {
+      if (nextPinyin || nextMeaning) {
+        setWordLookupPreview({
+          front: trimmedFront,
+          pinyin: nextPinyin,
+          meaning: nextMeaning,
+        });
+      }
+    }
+
+    setPendingWordLookup(null);
+  });
+
+  useEffect(() => {
+    if (!pendingWordLookup || isAutoFetching) {
+      return;
+    }
+
+    finalizePendingWordLookup();
+  }, [pendingWordLookup, isAutoFetching, finalizePendingWordLookup]);
+
+  const handleWordLookup = async () => {
+    const trimmedFront = formState.front.trim();
+    if (!trimmedFront) {
+      return;
+    }
+
+    setPendingWordLookup({
+      front: trimmedFront,
+      pinyin: formState.pinyin.trim(),
+      meaning: formState.meaning.trim(),
+    });
+
+    await onAutoFetch();
+  };
 
   if (!currentDeck) {
     return (
@@ -348,79 +468,159 @@ export default function AddCardView({
         <CardContent className="space-y-6 md:space-y-7">
           {authoringMode === "word" && (
             <section className="space-y-5 rounded-2xl border border-white/8 bg-slate-950/35 p-4 md:p-5">
-              <div className="grid gap-4 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-                <div className="space-y-2.5">
+              <div className="space-y-2.5">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <Label htmlFor="charInput" className="text-sm text-slate-200">
                     Chinese Word
                   </Label>
-                  <Input
-                    id="charInput"
-                    value={formState.front}
-                    onChange={(event) =>
-                      onFormChange({ front: event.target.value })
-                    }
-                    placeholder="你好"
-                    className="h-13 border-slate-600/80 bg-slate-900/80 text-2xl text-slate-50 shadow-inner shadow-black/20 focus-visible:border-blue-400/60"
-                  />
+                  <span className="text-xs text-slate-500">
+                    Start with the word you want to look up and save.
+                  </span>
                 </div>
-
-                <div className="space-y-2.5">
-                  <Label
-                    htmlFor="pinyinInput"
-                    className="text-sm text-slate-200"
-                  >
-                    Pinyin
-                  </Label>
-                  <Input
-                    id="pinyinInput"
-                    value={formState.pinyin}
-                    onChange={(event) =>
-                      onFormChange({ pinyin: event.target.value })
-                    }
-                    placeholder="ni3 hao3"
-                    className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
-                  />
-                  {formState.pinyin && (
-                    <div className="text-sm text-blue-200">
-                      {convertPinyinTones(formState.pinyin)}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2.5">
-                <Label
-                  htmlFor="meaningInput"
-                  className="text-sm text-slate-200"
-                >
-                  Meaning
-                </Label>
                 <Input
-                  id="meaningInput"
-                  value={formState.meaning}
-                  onChange={(event) =>
-                    onFormChange({ meaning: event.target.value })
-                  }
-                  placeholder="Hello, hi"
-                  className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
+                  id="charInput"
+                  value={formState.front}
+                  onChange={(event) => {
+                    const nextFront = event.target.value;
+
+                    if (wordLookupPreview && wordLookupPreview.front !== nextFront.trim()) {
+                      setWordLookupPreview(null);
+                    }
+
+                    setPendingWordLookup(null);
+                    onFormChange({ front: nextFront });
+                  }}
+                  placeholder="你好"
+                  className="h-13 border-slate-600/80 bg-slate-900/80 text-2xl text-slate-50 shadow-inner shadow-black/20 focus-visible:border-blue-400/60"
                 />
               </div>
 
-              <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void onAutoFetch()}
-                  disabled={isAutoFetching || !formState.front.trim()}
-                  className="min-w-[164px] border-blue-400/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/18 focus-visible:border-blue-300/60 disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
-                >
-                  {isAutoFetching ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="mr-2 h-4 w-4" />
-                  )}
-                  {isAutoFetching ? "Looking up..." : "Fill from dictionary"}
-                </Button>
+              <WorkflowActionPanel
+                title="Fill from dictionary"
+                description="Generate local pinyin and meaning from the built-in dictionary before you decide what to save."
+                action={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleWordLookup()}
+                    disabled={isAutoFetching || !formState.front.trim()}
+                    className="min-w-[164px] border-blue-400/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/18 focus-visible:border-blue-300/60 disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
+                  >
+                    {isAutoFetching ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-2 h-4 w-4" />
+                    )}
+                    {isAutoFetching ? "Looking up..." : "Fill from dictionary"}
+                  </Button>
+                }
+              />
+
+              {activeWordPreview && (
+                <div className="space-y-5 rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] p-5 shadow-[0_20px_48px_rgba(0,0,0,0.24)] md:p-6">
+                  <div className="flex flex-col gap-3 border-b border-white/8 pb-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-3">
+                      <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-2.5 py-1 text-[11px] uppercase tracking-[0.22em] text-blue-100/80">
+                        Dictionary result
+                      </div>
+                      <p className="font-chinese-ui text-3xl font-semibold tracking-tight text-white md:text-4xl">
+                        {activeWordPreview.front}
+                      </p>
+                      {activeWordPreview.pinyin && (
+                        <p className="text-sm leading-6 text-blue-100/75 md:text-base">
+                          {convertPinyinTones(activeWordPreview.pinyin)}
+                        </p>
+                      )}
+                    </div>
+                    <div className="max-w-xs text-xs leading-5 text-slate-500 sm:text-right">
+                      Generated from the local dictionary lookup. Review it
+                      first, then edit the saved fields below only if you want
+                      an override.
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-500">
+                      Meaning preview
+                    </p>
+                    <p className="text-base leading-7 text-slate-50 md:text-lg">
+                      {activeWordPreview.meaning || "No meaning returned from the current lookup."}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!activeWordPreview && hasWordDraft && (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/35 p-4 text-sm leading-6 text-slate-400">
+                  Run dictionary lookup to preview generated pinyin and meaning before saving.
+                </div>
+              )}
+
+              <div className="space-y-4 rounded-2xl border border-white/8 bg-slate-950/30 p-4 md:p-5">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-200">
+                      Save with card
+                    </p>
+                    <p className="text-xs leading-5 text-slate-500">
+                      Editable before saving. Keep the lookup result as-is, or
+                      adjust the wording to match how you want to study it.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="pinyinInput" className="text-sm text-slate-200">
+                        Saved pinyin
+                      </Label>
+                      {activeWordPreview && (
+                        <ValueSourceBadge
+                          isGenerated={savedWordPinyinIsGenerated}
+                          generatedLabel="Generated from lookup"
+                        />
+                      )}
+                    </div>
+                    <Input
+                      id="pinyinInput"
+                      value={formState.pinyin}
+                      onChange={(event) =>
+                        onFormChange({ pinyin: event.target.value })
+                      }
+                      placeholder="ni3 hao3"
+                      className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
+                    />
+                    {formState.pinyin && (
+                      <div className="text-sm text-blue-200">
+                        {convertPinyinTones(formState.pinyin)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="meaningInput" className="text-sm text-slate-200">
+                        Saved meaning
+                      </Label>
+                      {activeWordPreview && (
+                        <ValueSourceBadge
+                          isGenerated={savedWordMeaningIsGenerated}
+                          generatedLabel="Generated from lookup"
+                        />
+                      )}
+                    </div>
+                    <Input
+                      id="meaningInput"
+                      value={formState.meaning}
+                      onChange={(event) =>
+                        onFormChange({ meaning: event.target.value })
+                      }
+                      placeholder="Hello, hi"
+                      className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
+                    />
+                  </div>
+                </div>
               </div>
             </section>
           )}
@@ -451,31 +651,26 @@ export default function AddCardView({
                 />
               </div>
 
-              <div className="flex flex-col gap-3 rounded-2xl border border-white/8 bg-white/[0.025] p-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-slate-200">
-                    Analyze sentence
-                  </p>
-                  <p className="text-xs leading-5 text-slate-500">
-                    Review segmentation, pinyin, and generated meaning before
-                    saving.
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void onAnalyzeSentence()}
-                  disabled={isAnalyzingSentence || !formState.example.trim()}
-                  className="min-w-[164px] border-blue-400/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/18 focus-visible:border-blue-300/60 disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
-                >
-                  {isAnalyzingSentence ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="mr-2 h-4 w-4" />
-                  )}
-                  {isAnalyzingSentence ? "Analyzing..." : "Analyze sentence"}
-                </Button>
-              </div>
+              <WorkflowActionPanel
+                title="Analyze sentence"
+                description="Review segmentation, pinyin, and generated meaning before saving."
+                action={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void onAnalyzeSentence()}
+                    disabled={isAnalyzingSentence || !formState.example.trim()}
+                    className="min-w-[164px] border-blue-400/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/18 focus-visible:border-blue-300/60 disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
+                  >
+                    {isAnalyzingSentence ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-2 h-4 w-4" />
+                    )}
+                    {isAnalyzingSentence ? "Analyzing..." : "Analyze sentence"}
+                  </Button>
+                }
+              />
 
               {analysisPreview && (
                 <div className="space-y-5 rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] p-5 shadow-[0_20px_48px_rgba(0,0,0,0.24)] md:p-6">
@@ -593,17 +788,10 @@ export default function AddCardView({
                         Saved pinyin
                       </Label>
                       {analysisPreview && (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] ${
-                            savedSentencePinyinIsGenerated
-                              ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
-                              : "border border-white/10 bg-white/[0.05] text-slate-300"
-                          }`}
-                        >
-                          {savedSentencePinyinIsGenerated
-                            ? "Generated from analysis"
-                            : "Custom value"}
-                        </span>
+                        <ValueSourceBadge
+                          isGenerated={savedSentencePinyinIsGenerated}
+                          generatedLabel="Generated from analysis"
+                        />
                       )}
                     </div>
                     <Input
@@ -631,17 +819,10 @@ export default function AddCardView({
                         Saved meaning
                       </Label>
                       {analysisPreview && (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] ${
-                            savedSentenceMeaningIsGenerated
-                              ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
-                              : "border border-white/10 bg-white/[0.05] text-slate-300"
-                          }`}
-                        >
-                          {savedSentenceMeaningIsGenerated
-                            ? "Generated from analysis"
-                            : "Custom value"}
-                        </span>
+                        <ValueSourceBadge
+                          isGenerated={savedSentenceMeaningIsGenerated}
+                          generatedLabel="Generated from analysis"
+                        />
                       )}
                     </div>
                     <Input
@@ -663,7 +844,11 @@ export default function AddCardView({
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 variant="outline"
-                onClick={onClearForm}
+                onClick={() => {
+                  setPendingWordLookup(null);
+                  setWordLookupPreview(null);
+                  onClearForm();
+                }}
                 className="border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
               >
                 Clear form
