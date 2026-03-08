@@ -556,6 +556,32 @@ export default function ChineseFlashcardApp() {
 
     const front = newCardForm.front.trim();
     const meaning = newCardForm.meaning.trim();
+    const exampleSentence = normalizeExampleSentence(newCardForm.example);
+
+    const duplicateWord = cards.some(
+      (card) =>
+        card.deckId === currentDeck.id &&
+        card.front.trim().toLowerCase() === front.toLowerCase(),
+    );
+
+    if (duplicateWord) {
+      showToast("This Chinese word already exists in the selected deck");
+      return;
+    }
+
+    if (exampleSentence) {
+      const duplicateSentence = cards.some(
+        (card) =>
+          card.deckId === currentDeck.id &&
+          normalizeExampleSentence(card.example).toLowerCase() ===
+            exampleSentence.toLowerCase(),
+      );
+
+      if (duplicateSentence) {
+        showToast("This Chinese sentence already exists in the selected deck");
+        return;
+      }
+    }
 
     if (!front) {
       showToast("Please enter Chinese text for card front");
@@ -569,9 +595,8 @@ export default function ChineseFlashcardApp() {
 
     try {
       const srsInit = initializeNewCard();
-      const sentence = normalizeExampleSentence(newCardForm.example);
       const { exampleBreakdown, usageExamples } = await resolveExampleData({
-        nextSentence: sentence,
+        nextSentence: exampleSentence,
         examplePinyin: newCardForm.examplePinyin,
         exampleTranslation: newCardForm.exampleTranslation,
         cachedAnalysis: sentenceAnalysis,
@@ -583,7 +608,7 @@ export default function ChineseFlashcardApp() {
         front,
         pinyin: newCardForm.pinyin.trim(),
         meaning,
-        example: sentence,
+        example: exampleSentence,
         exampleBreakdown,
         ...(usageExamples ? { usageExamples } : {}),
         ...srsInit,
@@ -766,7 +791,7 @@ export default function ChineseFlashcardApp() {
           value={activeTab}
           onValueChange={(value) => setActiveTab(value as TabType)}
         >
-          <TabsList className="grid grid-cols-5 mb-6 bg-slate-800/50 p-1 rounded-xl">
+          <TabsList className="mx-auto mb-6 grid w-full max-w-2xl grid-cols-5 rounded-xl bg-slate-800/50 p-1">
             <TabsTrigger
               value="decks"
               className="flex items-center gap-1 text-xs md:text-sm"

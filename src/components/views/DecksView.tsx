@@ -129,7 +129,7 @@ export default function DecksView({
           </CardContent>
         </Card>
       ) : (
-        <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
+        <div className="mx-auto flex max-w-5xl flex-wrap justify-center gap-4">
           {decks.map((deck) => {
             const stats = deckStatsMap[deck.id] || {
               total: 0,
@@ -140,7 +140,7 @@ export default function DecksView({
             return (
               <Card
                 key={deck.id}
-                className="bg-gradient-to-b from-white/5 to-transparent border-slate-700 hover:border-blue-500/50 transition-colors"
+                className="w-full max-w-[392px] bg-gradient-to-b from-white/5 to-transparent border-slate-700 hover:border-blue-500/50 transition-colors"
               >
                 <CardHeader>
                   <div className="flex justify-between items-start">

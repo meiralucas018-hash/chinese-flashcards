@@ -169,7 +169,6 @@ function UsageExampleCard({
 export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [isCharacterVisible, setIsCharacterVisible] = useState(true);
-  const [canToggleCharacter, setCanToggleCharacter] = useState(false);
   const [frontBreakdown, setFrontBreakdown] = useState<
     CardType["exampleBreakdown"] | null
   >(null);
@@ -307,8 +306,7 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
                   variant="outline"
                   size="sm"
                   onClick={() => setIsCharacterVisible((prev) => !prev)}
-                  disabled={!canToggleCharacter}
-                  className="border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.08] hover:text-white disabled:border-white/10 disabled:bg-white/[0.02] disabled:text-slate-500"
+                  className="border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.08] hover:text-white"
                 >
                   {isCharacterVisible ? "Hide character" : "Show character"}
                 </Button>
@@ -322,7 +320,7 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
               height={320}
               showTemplate={false}
               showGrid
-              onInteraction={() => setCanToggleCharacter(true)}
+              onInteraction={() => setIsCharacterVisible(false)}
             />
 
             {/* Action buttons */}
@@ -343,10 +341,10 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
                 )}
               </Button>
               <Button
-                variant="default"
+                variant="outline"
                 size="sm"
                 onClick={handleFlip}
-                className="border border-blue-400/40 bg-blue-500/18 text-blue-100 shadow-[0_10px_30px_rgba(59,130,246,0.22)] hover:border-blue-300/60 hover:bg-blue-500/26 hover:text-white"
+                className="bg-blue-500/10 border-blue-500/30 text-blue-100 hover:bg-blue-500/20"
               >
                 <RotateCw className="w-4 h-4 mr-2" />
                 Show Answer
