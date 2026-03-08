@@ -1,9 +1,17 @@
+import { smoothFallbackTranslation } from "./english-utils";
 import { loadCedict } from "./loader";
 import { buildExampleBreakdown } from "./index";
 
 export type CedictValidationCase = {
   sentence: string;
   expectedSource?: "exact" | "rule" | "fallback";
+  expectedTranslationIncludes: string[];
+  expectedTranslationExcludes?: string[];
+};
+
+export type EnglishPolishValidationCase = {
+  sentence: string;
+  input: string;
   expectedTranslationIncludes: string[];
   expectedTranslationExcludes?: string[];
 };
@@ -182,13 +190,13 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
   },
   {
     sentence: "我听得懂。",
-    expectedTranslationIncludes: ["can", "understand", "hearing"],
-    expectedTranslationExcludes: ["listen can", "get"],
+    expectedTranslationIncludes: ["can", "understand", "when i hear it"],
+    expectedTranslationExcludes: ["listen can", "get", "when hearing it"],
   },
   {
     sentence: "我听不懂。",
-    expectedTranslationIncludes: ["cannot", "understand", "hearing"],
-    expectedTranslationExcludes: ["listen can", "get"],
+    expectedTranslationIncludes: ["cannot", "understand", "when i hear it"],
+    expectedTranslationExcludes: ["listen can", "get", "when hearing it"],
   },
   {
     sentence: "我做得到。",
@@ -342,6 +350,39 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
     expectedTranslationIncludes: ["was", "fired", "company"],
     expectedTranslationExcludes: ["quilt", "expel", "by company fire"],
   },
+  {
+    sentence: "他说得很好。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["speaks", "very well"],
+    expectedTranslationExcludes: ["(much, good etc)", "very good"],
+  },
+  {
+    sentence: "我做得很好。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["do", "very well"],
+    expectedTranslationExcludes: ["(much, good etc)", "very good"],
+  },
+  {
+    sentence: "她写得很好。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["writes", "very well"],
+    expectedTranslationExcludes: ["(much, good etc)", "very good"],
+  },
+];
+
+export const ENGLISH_POLISH_VALIDATION_CASES: EnglishPolishValidationCase[] = [
+  {
+    sentence: "[fallback] me is student",
+    input: "me is student",
+    expectedTranslationIncludes: ["i am a student"],
+    expectedTranslationExcludes: ["me is", "i is"],
+  },
+  {
+    sentence: "[fallback] this is my one",
+    input: "this is my one",
+    expectedTranslationIncludes: ["this is mine"],
+    expectedTranslationExcludes: ["my one"],
+  },
 ];
 
 export async function runCedictValidation(): Promise<
@@ -354,7 +395,7 @@ export async function runCedictValidation(): Promise<
 > {
   const index = await loadCedict();
 
-  return CEDICT_VALIDATION_CASES.map((testCase) => {
+  const cedictResults = CEDICT_VALIDATION_CASES.map((testCase) => {
     const result = buildExampleBreakdown(testCase.sentence, index);
     const lowerTranslation = result.translation.toLowerCase();
     const passedIncludes = testCase.expectedTranslationIncludes.every(
@@ -374,4 +415,26 @@ export async function runCedictValidation(): Promise<
       passed: passedIncludes && passedExcludes && passedSource,
     };
   });
+
+  const englishPolishResults = ENGLISH_POLISH_VALIDATION_CASES.map(
+    (testCase) => {
+      const translation = smoothFallbackTranslation(testCase.input);
+      const lowerTranslation = translation.toLowerCase();
+      const passedIncludes = testCase.expectedTranslationIncludes.every(
+        (fragment) => lowerTranslation.includes(fragment),
+      );
+      const passedExcludes = (testCase.expectedTranslationExcludes || []).every(
+        (fragment) => !lowerTranslation.includes(fragment),
+      );
+
+      return {
+        sentence: testCase.sentence,
+        translation,
+        translationSource: "fallback",
+        passed: passedIncludes && passedExcludes,
+      };
+    },
+  );
+
+  return [...cedictResults, ...englishPolishResults];
 }

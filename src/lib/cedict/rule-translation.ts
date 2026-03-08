@@ -39,6 +39,7 @@ import {
   isQuestionMarkToken,
   makeSentence,
   normalizeClauseOrder,
+  normalizeFinalEnglishClause,
   normalizeProgressiveEnglish,
   possessiveForSubject,
   possessivePronounForDeterminer,
@@ -46,6 +47,7 @@ import {
   replaceStandaloneObject,
   sentenceWithoutPunctuation,
   stripClassifierGloss,
+  smoothFallbackTranslation,
   toGerund,
   toPastParticiple,
   toPastTense,
@@ -1048,8 +1050,9 @@ function detectProgressiveStructure(
   }
 
   return {
-    marker: context.tokens.find((token) => PROGRESSIVE_MARKERS.has(token.word))
-      ?.word || "正在",
+    marker:
+      context.tokens.find((token) => PROGRESSIVE_MARKERS.has(token.word))
+        ?.word || "正在",
     locationTokens: [],
     actionTokens: context.predicateTokens,
   };
@@ -1093,7 +1096,9 @@ function buildProgressiveQuestionSentence(
     return null;
   }
 
-  const progressiveVerb = toGerund(normalizeProgressiveEnglish(actionPhrase.text));
+  const progressiveVerb = toGerund(
+    normalizeProgressiveEnglish(actionPhrase.text),
+  );
   const location = translateLocationModifier(structure.locationTokens);
   const predicate = [progressiveVerb, location].filter(Boolean).join(" ");
 
@@ -1117,7 +1122,9 @@ function buildProgressiveClause(
     .filter(Boolean)
     .join(" ");
   const clause = isQuestion
-    ? sentenceWithoutPunctuation(buildYesNoQuestion(subject, "be", progressivePredicate))
+    ? sentenceWithoutPunctuation(
+        buildYesNoQuestion(subject, "be", progressivePredicate),
+      )
     : `${subject} ${beForm(subject)}${isNegative ? " not" : ""} ${progressivePredicate}`;
 
   return makeSentence(
@@ -1126,7 +1133,9 @@ function buildProgressiveClause(
   );
 }
 
-function detectImperativeStructure(tokens: RuleToken[]): ImperativeStructure | null {
+function detectImperativeStructure(
+  tokens: RuleToken[],
+): ImperativeStructure | null {
   if (tokens.length === 0) {
     return null;
   }
@@ -1159,9 +1168,9 @@ function detectImperativeStructure(tokens: RuleToken[]): ImperativeStructure | n
     index += 1;
   }
 
-  const actionTokens = tokens.slice(index).filter(
-    (token) => !isPunctuationToken(token.word),
-  );
+  const actionTokens = tokens
+    .slice(index)
+    .filter((token) => !isPunctuationToken(token.word));
   if (actionTokens.length === 0) {
     return null;
   }
@@ -1192,7 +1201,9 @@ function imperativeVerbOverride(verb: string): string {
   return verb;
 }
 
-function buildImperativePredicate(structure: ImperativeStructure): string | null {
+function buildImperativePredicate(
+  structure: ImperativeStructure,
+): string | null {
   const actionPhrase = translateVerbPhrase(structure.actionTokens);
   const combinedWord = `${structure.actionTokens[0]?.word || ""}${structure.actionTokens[1]?.word || ""}`;
   const explicitVerb =
@@ -1203,9 +1214,14 @@ function buildImperativePredicate(structure: ImperativeStructure): string | null
     ? actionPhrase.text
     : normalizeVerbObjectPhrase(
         imperativeVerbOverride(explicitVerb || ""),
-        translateNaturalPhrase(structure.actionTokens.slice(explicitVerb === VERB_TRANSLATIONS[combinedWord] ? 1 : 1), {
-          asObject: true,
-        }),
+        translateNaturalPhrase(
+          structure.actionTokens.slice(
+            explicitVerb === VERB_TRANSLATIONS[combinedWord] ? 1 : 1,
+          ),
+          {
+            asObject: true,
+          },
+        ),
       );
 
   const normalizedPredicate = normalizeProgressiveEnglish(predicate)
@@ -3109,26 +3125,35 @@ export function buildNaturalTranslation(
   wordSegments: WordSegment[],
   literalGloss: string,
 ): Omit<TranslationResult, "literalGloss"> {
+  const context = buildContext(wordSegments);
+
   const lexicalizedTranslation = getLexicalizedTranslation(wordSegments);
   if (lexicalizedTranslation) {
     return {
-      translation: lexicalizedTranslation,
+      translation: normalizeFinalEnglishClause(lexicalizedTranslation, {
+        subject: context?.subject,
+      }),
       translationSource: "rule",
       confidence: 0.96,
     };
   }
 
   const ruleBasedTranslation = buildRuleBasedTranslation(wordSegments);
-  const ruleScore = ruleBasedTranslation
-    ? scoreRuleTranslation(ruleBasedTranslation, literalGloss)
+  const polishedRuleTranslation = ruleBasedTranslation
+    ? normalizeFinalEnglishClause(ruleBasedTranslation, {
+        subject: context?.subject,
+      })
+    : null;
+  const ruleScore = polishedRuleTranslation
+    ? scoreRuleTranslation(polishedRuleTranslation, literalGloss)
     : 0;
 
   if (
-    ruleBasedTranslation &&
-    isAcceptableRuleTranslation(ruleBasedTranslation, literalGloss)
+    polishedRuleTranslation &&
+    isAcceptableRuleTranslation(polishedRuleTranslation, literalGloss)
   ) {
     return {
-      translation: ruleBasedTranslation,
+      translation: polishedRuleTranslation,
       translationSource: "rule",
       confidence: deriveRuleConfidence(ruleScore),
     };
@@ -3136,7 +3161,7 @@ export function buildNaturalTranslation(
 
   // Weak rule output is safer to discard than to surface as a confident sentence.
   return {
-    translation: literalGloss,
+    translation: smoothFallbackTranslation(literalGloss) || literalGloss,
     translationSource: "fallback",
     confidence: 0.42,
   };

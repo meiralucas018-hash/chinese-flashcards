@@ -493,8 +493,87 @@ export function withSentenceContext(
   return `${bareSentence} ${timePhrase}${punctuation}`;
 }
 
+export function normalizeLightVerbPhrasing(value: string): string {
+  return value
+    .replace(
+      /\b(do|does|did|speak|speaks|spoke|talk|talks|talked|write|writes|wrote|read|reads|study|studies|studied|work|works|worked|cook|cooks|cooked|learn|learns|learned|learnt)\s+(very|quite|really|too)\s+good\b/gi,
+      "$1 $2 well",
+    )
+    .replace(
+      /\b(do|does|did|speak|speaks|spoke|talk|talks|talked|write|writes|wrote|read|reads|study|studies|studied|work|works|worked|cook|cooks|cooked|learn|learns|learned|learnt)\s+good\b/gi,
+      "$1 well",
+    );
+}
+
+export function normalizeArticleChoice(value: string): string {
+  let result = value.replace(
+    /\b(my|your|his|her|its|our|their)\s+one\b/gi,
+    (match, determiner: string) =>
+      POSSESSIVE_PRONOUN_TRANSLATIONS[determiner.toLowerCase()] || match,
+  );
+
+  result = result.replace(/\b(a|an)\s+(mine|yours|his|hers|its|ours|theirs)\b/gi, "$2");
+
+  return result.replace(
+    /\b(I|you|he|she|it|we|they|this|that)\s+(am|are|is|was|were)\s+([^,.!?]+)\b/i,
+    (match, subject: string, copula: string, predicate: string) => {
+      const normalizedPredicate = addSimpleArticle(subject, predicate);
+      return `${subject} ${copula} ${normalizedPredicate}`;
+    },
+  );
+}
+
+export function normalizePronounInsertion(
+  value: string,
+  subject?: string,
+): string {
+  const normalizedSubject = subject?.trim();
+  if (!normalizedSubject) {
+    return value;
+  }
+
+  const clauseSubject =
+    normalizedSubject.toLowerCase() === "i"
+      ? "I"
+      : normalizedSubject.toLowerCase();
+
+  return value.replace(
+    /\bwhen hearing it\b/gi,
+    `when ${clauseSubject} ${conjugateVerb(normalizedSubject, "hear")} it`,
+  );
+}
+
+export function normalizeRedundantWording(value: string): string {
+  return value
+    .replace(/\b(very|quite|really|too)\s+well\s+well\b/gi, "$1 well")
+    .replace(/\bwell\s+well\b/gi, "well")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function normalizeFinalEnglishClause(
+  value: string,
+  options?: { subject?: string },
+): string {
+  const punctuation = value.match(/[.?!]+$/)?.[0] || "";
+  let result = sentenceWithoutPunctuation(value);
+
+  result = stripClassifierGloss(result);
+  result = normalizeLightVerbPhrasing(result);
+  result = normalizeArticleChoice(result);
+  result = normalizePronounInsertion(result, options?.subject);
+  result = normalizeRedundantWording(result);
+  result = normalizeClauseOrder(result);
+
+  if (!result) {
+    return "";
+  }
+
+  return `${capitalizeSentence(result)}${punctuation}`;
+}
+
 export function smoothFallbackTranslation(value: string): string {
-  let result = value.replace(/\s+/g, " ").trim();
+  let result = stripClassifierGloss(value).replace(/\s+/g, " ").trim();
 
   result = result
     .replace(/^me\b/i, "I")
@@ -517,5 +596,7 @@ export function smoothFallbackTranslation(value: string): string {
     },
   );
 
-  return capitalizeSentence(result.replace(/\s+([,.;!?])/g, "$1").trim());
+  return normalizeFinalEnglishClause(
+    result.replace(/\s+([,.;!?])/g, "$1").trim(),
+  );
 }
