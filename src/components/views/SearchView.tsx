@@ -66,7 +66,7 @@ export default function SearchView({
           <div className="space-y-4 mt-6">
             {results.words.length > 0 && (
               <div>
-                <h4 className="text-sm font-medium text-purple-400 mb-3">
+                <h4 className="text-sm font-medium text-blue-300 mb-3">
                   Words
                 </h4>
                 <div className="grid gap-2">
@@ -91,6 +91,7 @@ export default function SearchView({
                             size="sm"
                             variant="ghost"
                             onClick={() => onSpeak(word.word)}
+                            className="text-slate-300 hover:bg-blue-500/12 hover:text-blue-100"
                           >
                             <Volume2 className="w-4 h-4" />
                           </Button>
@@ -122,7 +123,7 @@ export default function SearchView({
 
             {results.characters.length > 0 && (
               <div>
-                <h4 className="text-sm font-medium text-purple-400 mb-3">
+                <h4 className="text-sm font-medium text-blue-300 mb-3">
                   Characters
                 </h4>
                 <div className="grid gap-2">
@@ -152,6 +153,7 @@ export default function SearchView({
                         size="sm"
                         variant="ghost"
                         onClick={() => onSpeak(char.char)}
+                        className="text-slate-300 hover:bg-blue-500/12 hover:text-blue-100"
                       >
                         <Volume2 className="w-4 h-4" />
                       </Button>

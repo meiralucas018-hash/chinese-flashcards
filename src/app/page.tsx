@@ -217,15 +217,27 @@ export default function ChineseFlashcardApp() {
 
   const handleCreateDeck = useCallback(
     async (name: string, description: string) => {
-      if (!name.trim()) {
+      const trimmedName = name.trim();
+      const trimmedDescription = description.trim();
+
+      if (!trimmedName) {
         showToast("Please enter a deck name");
-        return;
+        return false;
+      }
+
+      const hasDuplicateName = decks.some(
+        (deck) => deck.name.trim().toLowerCase() === trimmedName.toLowerCase(),
+      );
+
+      if (hasDuplicateName) {
+        showToast("A deck with this name already exists");
+        return false;
       }
 
       const newDeck: Deck = {
         id: generateId(),
-        name: name.trim(),
-        description: description.trim(),
+        name: trimmedName,
+        description: trimmedDescription,
         createdAt: Date.now(),
         updatedAt: Date.now(),
         cardCount: 0,
@@ -235,12 +247,14 @@ export default function ChineseFlashcardApp() {
         await flashcardDb.createDeck(newDeck);
         setDecks((prev) => [...prev, newDeck]);
         showToast("Deck created successfully");
+        return true;
       } catch (error) {
         console.error("Failed to create deck:", error);
         showToast("Failed to create deck");
+        return false;
       }
     },
-    [setDecks, showToast],
+    [decks, setDecks, showToast],
   );
 
   const handleDeleteDeck = useCallback(
@@ -813,6 +827,7 @@ export default function ChineseFlashcardApp() {
 
           <TabsContent value="add">
             <AddCardView
+              decks={decks}
               currentDeck={currentDeck}
               cardsInDeck={cardsInCurrentDeck}
               formState={newCardForm}
@@ -820,6 +835,12 @@ export default function ChineseFlashcardApp() {
               isAutoFetching={isAutoFetching}
               isAnalyzingSentence={isAnalyzingSentence}
               onGoDecks={() => setActiveTab("decks")}
+              onSelectDeck={(deckId) => {
+                const selectedDeck = decks.find((deck) => deck.id === deckId);
+                if (selectedDeck) {
+                  setCurrentDeck(selectedDeck);
+                }
+              }}
               onFormChange={updateForm}
               onAutoFetch={handleAutoFetch}
               onAnalyzeSentence={handleAnalyzeSentence}

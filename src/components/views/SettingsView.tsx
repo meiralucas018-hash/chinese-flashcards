@@ -44,7 +44,7 @@ export default function SettingsView({
             <Button
               onClick={() => void onExport()}
               variant="outline"
-              className="gap-2"
+              className="gap-2 border-slate-600 bg-white/[0.03] text-slate-200 hover:bg-blue-500/12 hover:text-blue-100"
             >
               <Download className="w-4 h-4" />
               Export Data
@@ -63,7 +63,7 @@ export default function SettingsView({
               />
               <Button
                 variant="outline"
-                className="gap-2"
+                className="gap-2 border-slate-600 bg-white/[0.03] text-slate-200 hover:bg-blue-500/12 hover:text-blue-100"
                 onClick={() => document.getElementById("import-file")?.click()}
               >
                 <Upload className="w-4 h-4" />

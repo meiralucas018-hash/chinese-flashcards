@@ -1,15 +1,11 @@
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Check,
   CircleHelp,
   FolderOpen,
   Loader2,
   Pencil,
+  Search,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -23,6 +19,13 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { buildExampleBreakdown, loadCedict } from "@/lib/cedict";
 import { convertPinyinTones } from "@/lib/pinyin";
@@ -59,6 +62,7 @@ export interface NewCardFormState {
 }
 
 interface AddCardViewProps {
+  decks: Deck[];
   currentDeck: Deck | null;
   cardsInDeck: CardType[];
   formState: NewCardFormState;
@@ -66,6 +70,7 @@ interface AddCardViewProps {
   isAutoFetching: boolean;
   isAnalyzingSentence: boolean;
   onGoDecks: () => void;
+  onSelectDeck: (deckId: string) => void;
   onFormChange: (patch: Partial<NewCardFormState>) => void;
   onAutoFetch: () => Promise<void>;
   onAnalyzeSentence: () => Promise<void>;
@@ -281,6 +286,7 @@ function shouldShowLiteralGloss(
 }
 
 export default function AddCardView({
+  decks,
   currentDeck,
   cardsInDeck,
   formState,
@@ -288,6 +294,7 @@ export default function AddCardView({
   isAutoFetching,
   isAnalyzingSentence,
   onGoDecks,
+  onSelectDeck,
   onFormChange,
   onAutoFetch,
   onAnalyzeSentence,
@@ -303,6 +310,7 @@ export default function AddCardView({
     useState<PendingWordLookup | null>(null);
   const [wordLookupPreview, setWordLookupPreview] =
     useState<GeneratedWordPreview | null>(null);
+  const [deckCardSearch, setDeckCardSearch] = useState("");
 
   const analysisPreview = useMemo(() => {
     if (!sentenceAnalysis) return null;
@@ -322,6 +330,35 @@ export default function AddCardView({
     "min-h-13 border-slate-600/80 bg-slate-900/80 font-chinese-ui text-2xl leading-relaxed text-slate-50 shadow-inner shadow-black/20 focus-visible:border-blue-400/60";
   const hasWordDraft = formState.front.trim().length > 0;
   const hasSentenceDraft = formState.example.trim().length > 0;
+  const filteredCardsInDeck = useMemo(() => {
+    const query = deckCardSearch.trim().toLowerCase();
+    if (!query) {
+      return cardsInDeck;
+    }
+
+    return cardsInDeck.filter((card) => {
+      const haystacks = [
+        card.front,
+        card.pinyin,
+        convertPinyinTones(card.pinyin),
+        card.meaning,
+        card.example,
+        card.exampleBreakdown?.translation,
+        card.exampleBreakdown?.literalGloss,
+        ...(card.usageExamples?.flatMap((example) => [
+          example.sentence,
+          example.pinyin,
+          convertPinyinTones(example.pinyin),
+          example.translation,
+          example.literalGloss || "",
+        ]) || []),
+      ]
+        .filter((value): value is string => Boolean(value))
+        .map((value) => value.toLowerCase());
+
+      return haystacks.some((value) => value.includes(query));
+    });
+  }, [cardsInDeck, deckCardSearch]);
 
   useEffect(() => {
     if (!pendingWordLookup || isAutoFetching) {
@@ -345,7 +382,10 @@ export default function AddCardView({
         nextPinyin !== pendingWordLookup.pinyin ||
         nextMeaning !== pendingWordLookup.meaning;
 
-      if (!lookupChanged && wordLookupPreview?.front !== pendingWordLookup.front) {
+      if (
+        !lookupChanged &&
+        wordLookupPreview?.front !== pendingWordLookup.front
+      ) {
         if (!isCancelled) {
           setPendingWordLookup(null);
         }
@@ -403,12 +443,12 @@ export default function AddCardView({
     await onAutoFetch();
   };
 
-  if (!currentDeck) {
+  if (decks.length === 0) {
     return (
       <Card className="border-slate-700 bg-slate-800/30">
         <CardContent className="py-12 text-center text-slate-400">
           <FolderOpen className="mx-auto mb-4 h-12 w-12 opacity-50" />
-          <p className="mb-4">Select a deck first to add cards.</p>
+          <p className="mb-4">Create a deck first to add cards.</p>
           <Button onClick={onGoDecks}>Go to Decks</Button>
         </CardContent>
       </Card>
@@ -425,11 +465,33 @@ export default function AddCardView({
                 <span className="uppercase tracking-[0.22em] text-slate-500">
                   Deck
                 </span>
-                <span className="text-slate-100">{currentDeck.name}</span>
+                <span className="text-slate-100">
+                  {currentDeck?.name || "Choose deck"}
+                </span>
               </div>
               <CardTitle className="text-xl text-slate-50 md:text-2xl">
                 Add Card
               </CardTitle>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm text-slate-200">Save To Deck</Label>
+              <Select value={currentDeck?.id} onValueChange={onSelectDeck}>
+                <SelectTrigger className="w-full border-slate-600/80 bg-slate-900/80 text-slate-100 hover:bg-slate-900/90 sm:w-[280px]">
+                  <SelectValue placeholder="Choose a deck" />
+                </SelectTrigger>
+                <SelectContent className="border-slate-700 bg-slate-950 text-slate-100">
+                  {decks.map((deck) => (
+                    <SelectItem
+                      key={deck.id}
+                      value={deck.id}
+                      className="text-slate-100 focus:bg-blue-500/12 focus:text-blue-100"
+                    >
+                      {deck.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
@@ -549,7 +611,8 @@ export default function AddCardView({
                         Interactive word map
                       </p>
                       <p className="text-xs text-slate-500">
-                        Select a word group or character to inspect the breakdown.
+                        Select a word group or character to inspect the
+                        breakdown.
                       </p>
                     </div>
                     <CharacterBreakdown
@@ -871,18 +934,42 @@ export default function AddCardView({
         <CardHeader>
           <CardTitle className="text-slate-100">Deck Cards</CardTitle>
           <CardDescription className="text-slate-400">
-            View, edit, and delete cards in {currentDeck.name}.
+            View, edit, and search cards in{" "}
+            {currentDeck?.name || "the selected deck"}.
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 space-y-2">
+            <Label
+              htmlFor="deck-card-search"
+              className="text-sm text-slate-200"
+            >
+              Search this deck
+            </Label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <Input
+                id="deck-card-search"
+                value={deckCardSearch}
+                onChange={(event) => setDeckCardSearch(event.target.value)}
+                placeholder="Search by Chinese, pinyin, English meaning, or example"
+                className="border-slate-600/80 bg-slate-900/80 pl-9 text-slate-100 focus-visible:border-blue-400/60"
+              />
+            </div>
+          </div>
+
           {cardsInDeck.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/35 p-5 text-sm text-slate-400">
               No cards in this deck yet. Add your first card above to start
               building a study set.
             </div>
+          ) : filteredCardsInDeck.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/35 p-5 text-sm text-slate-400">
+              No cards matched that search in this deck.
+            </div>
           ) : (
             <div className="max-h-[360px] space-y-3 overflow-y-auto pr-1">
-              {cardsInDeck.map((card) => (
+              {filteredCardsInDeck.map((card) => (
                 <EditableCardRow
                   key={card.id}
                   card={card}

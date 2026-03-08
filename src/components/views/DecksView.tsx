@@ -37,7 +37,7 @@ import type { Deck } from "@/types";
 interface DecksViewProps {
   decks: Deck[];
   deckStatsMap: Record<string, { total: number; due: number; learned: number }>;
-  onCreateDeck: (name: string, description: string) => Promise<void>;
+  onCreateDeck: (name: string, description: string) => Promise<boolean>;
   onDeleteDeck: (deckId: string) => Promise<void>;
   onStudyDeck: (deckId: string) => void;
   onSelectDeckForCards: (deck: Deck) => void;
@@ -53,12 +53,13 @@ export default function DecksView({
 }: DecksViewProps) {
   const [newDeckName, setNewDeckName] = useState("");
   const [newDeckDescription, setNewDeckDescription] = useState("");
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   return (
-    <div className="space-y-4">
-      <div className="mb-4 flex items-center gap-3">
+    <div className="space-y-6">
+      <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-4 text-center">
         <h2 className="text-xl font-semibold text-slate-100">Your Decks</h2>
-        <Dialog>
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button
               size="sm"
@@ -102,9 +103,15 @@ export default function DecksView({
             <DialogFooter>
               <Button
                 onClick={async () => {
-                  await onCreateDeck(newDeckName, newDeckDescription);
-                  setNewDeckName("");
-                  setNewDeckDescription("");
+                  const created = await onCreateDeck(
+                    newDeckName,
+                    newDeckDescription,
+                  );
+                  if (created) {
+                    setNewDeckName("");
+                    setNewDeckDescription("");
+                    setIsCreateOpen(false);
+                  }
                 }}
               >
                 Create Deck
@@ -115,14 +122,14 @@ export default function DecksView({
       </div>
 
       {decks.length === 0 ? (
-        <Card className="bg-slate-800/30 border-slate-700">
+        <Card className="mx-auto max-w-3xl bg-slate-800/30 border-slate-700">
           <CardContent className="py-12 text-center text-slate-400">
             <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>No decks yet. Create your first deck to get started.</p>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
           {decks.map((deck) => {
             const stats = deckStatsMap[deck.id] || {
               total: 0,

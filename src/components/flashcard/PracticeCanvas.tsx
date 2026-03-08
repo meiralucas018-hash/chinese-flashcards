@@ -2,7 +2,7 @@
 
 import React, { useRef, useLayoutEffect, useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Trash2, Pencil } from "lucide-react";
+import { RotateCcw, Trash2 } from "lucide-react";
 
 interface Point {
   x: number;
@@ -15,6 +15,7 @@ interface PracticeCanvasProps {
   height?: number;
   showGrid?: boolean;
   showTemplate?: boolean;
+  onInteraction?: () => void;
 }
 
 /**
@@ -207,11 +208,11 @@ export default function PracticeCanvas({
   width = 280,
   height = 280,
   showGrid = true,
-  showTemplate = true,
+  showTemplate = false,
+  onInteraction,
 }: PracticeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(true);
   const [strokeCount, setStrokeCount] = useState(0);
   const rawPointsRef = useRef<Point[]>([]);
   const undoStackRef = useRef<ImageData[]>([]);
@@ -394,8 +395,9 @@ export default function PracticeCanvas({
 
       setIsDrawing(true);
       rawPointsRef.current = [getCoords(e)];
+      onInteraction?.();
     },
-    [getCoords],
+    [getCoords, onInteraction],
   );
 
   // Continue drawing
@@ -482,82 +484,67 @@ export default function PracticeCanvas({
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="bg-white/5 border-white/10 hover:bg-blue-500/20 hover:border-blue-500/40"
-      >
-        <Pencil className="w-4 h-4 mr-2" />
-        {isExpanded ? "Close Drawing Pad" : "Practice Drawing"}
-      </Button>
+      <div className="flex flex-col items-center gap-3 transition-all duration-300">
+        <div className="relative inline-block">
+          {showGrid && (
+            <div className="absolute inset-0 pointer-events-none rounded-lg border border-dashed border-white/15 bg-[image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[length:50%_50%]">
+              <div className="absolute inset-0 bg-[image:linear-gradient(135deg,transparent_49%,rgba(255,255,255,0.04)_50%,transparent_51%),linear-gradient(45deg,transparent_49%,rgba(255,255,255,0.04)_50%,transparent_51%)]" />
+            </div>
+          )}
 
-      {isExpanded && (
-        <div className="flex flex-col items-center gap-3 transition-all duration-300">
-          <div className="relative inline-block">
-            {/* Grid overlay */}
-            {showGrid && (
-              <div className="absolute inset-0 pointer-events-none rounded-lg border border-dashed border-white/15 bg-[image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[length:50%_50%]">
-                {/* Diagonal lines for 米 character grid */}
-                <div className="absolute inset-0 bg-[image:linear-gradient(135deg,transparent_49%,rgba(255,255,255,0.04)_50%,transparent_51%),linear-gradient(45deg,transparent_49%,rgba(255,255,255,0.04)_50%,transparent_51%)]" />
-              </div>
-            )}
-
-            {/* Canvas */}
-            <canvas
-              ref={canvasRef}
-              width={width}
-              height={height}
-              className="rounded-lg cursor-crosshair touch-none bg-[rgba(0,0,0,0.25)] shadow-[inset_0_3px_15px_rgba(0,0,0,0.6)]"
-              onPointerDown={(event) => {
-                activePointerIdRef.current = event.pointerId;
-                event.currentTarget.setPointerCapture(event.pointerId);
-                handleStart(event);
-              }}
-              onPointerMove={(event) => {
-                if (activePointerIdRef.current !== event.pointerId) return;
-                handleMove(event);
-              }}
-              onPointerUp={(event) => {
-                if (activePointerIdRef.current === event.pointerId) {
-                  activePointerIdRef.current = null;
-                  handleEnd();
-                }
-              }}
-              onPointerCancel={(event) => {
-                if (activePointerIdRef.current === event.pointerId) {
-                  activePointerIdRef.current = null;
-                  handleEnd();
-                }
-              }}
-            />
-          </div>
-
-          <div className="text-xs text-slate-400">Strokes: {strokeCount}</div>
-
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleUndo}
-              disabled={strokeCount === 0}
-              className="bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20"
-            >
-              <RotateCcw className="w-4 h-4 mr-1" />
-              Undo
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleClear}
-              className="bg-red-500/10 border-red-500/30 hover:bg-red-500/20"
-            >
-              <Trash2 className="w-4 h-4 mr-1" />
-              Clear
-            </Button>
-          </div>
+          <canvas
+            ref={canvasRef}
+            width={width}
+            height={height}
+            className="rounded-lg cursor-crosshair touch-none bg-[rgba(0,0,0,0.25)] shadow-[inset_0_3px_15px_rgba(0,0,0,0.6)]"
+            onPointerDown={(event) => {
+              activePointerIdRef.current = event.pointerId;
+              event.currentTarget.setPointerCapture(event.pointerId);
+              handleStart(event);
+            }}
+            onPointerMove={(event) => {
+              if (activePointerIdRef.current !== event.pointerId) return;
+              handleMove(event);
+            }}
+            onPointerUp={(event) => {
+              if (activePointerIdRef.current === event.pointerId) {
+                activePointerIdRef.current = null;
+                handleEnd();
+              }
+            }}
+            onPointerCancel={(event) => {
+              if (activePointerIdRef.current === event.pointerId) {
+                activePointerIdRef.current = null;
+                handleEnd();
+              }
+            }}
+          />
         </div>
-      )}
+
+        <div className="text-xs text-slate-400">Strokes: {strokeCount}</div>
+
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleUndo}
+            disabled={strokeCount === 0}
+            className="bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20"
+          >
+            <RotateCcw className="w-4 h-4 mr-1" />
+            Undo
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleClear}
+            className="bg-red-500/10 border-red-500/30 hover:bg-red-500/20"
+          >
+            <Trash2 className="w-4 h-4 mr-1" />
+            Clear
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

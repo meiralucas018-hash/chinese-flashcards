@@ -45,7 +45,7 @@ export default function StudyView({
           variant="ghost"
           size="sm"
           onClick={onEndSession}
-          className="text-slate-400"
+          className="text-slate-300 hover:bg-white/[0.06] hover:text-slate-50"
         >
           <ChevronLeft className="w-4 h-4 mr-1" />
           End Session
@@ -59,6 +59,7 @@ export default function StudyView({
         className="h-1 bg-slate-700"
       />
       <Flashcard
+        key={studyQueue[currentCardIndex].id}
         card={studyQueue[currentCardIndex]}
         onRate={onRateCard}
         onTTS={onSpeakChinese}

@@ -8,6 +8,7 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { Card as CardType, Rating, UsageExample } from "@/types";
+import { buildExampleBreakdown, loadCedict } from "@/lib/cedict";
 import { convertPinyinTones, getToneColor } from "@/lib/pinyin";
 import {
   calculateNextReview,
@@ -167,6 +168,11 @@ function UsageExampleCard({
 
 export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
   const [isFlipped, setIsFlipped] = useState(false);
+  const [isCharacterVisible, setIsCharacterVisible] = useState(true);
+  const [canToggleCharacter, setCanToggleCharacter] = useState(false);
+  const [frontBreakdown, setFrontBreakdown] = useState<
+    CardType["exampleBreakdown"] | null
+  >(null);
 
   const handleFlip = useCallback(() => {
     setIsFlipped((prev) => !prev);
@@ -203,6 +209,35 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
     },
     [card, onRate],
   );
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadFrontBreakdown = async () => {
+      if (!card.front.trim()) {
+        if (!isCancelled) {
+          setFrontBreakdown(null);
+        }
+        return;
+      }
+
+      const index = await loadCedict();
+      const breakdown = buildExampleBreakdown(card.front, index, {
+        pinyinOverride: card.pinyin || undefined,
+        translation: card.meaning || undefined,
+      });
+
+      if (!isCancelled) {
+        setFrontBreakdown(breakdown);
+      }
+    };
+
+    void loadFrontBreakdown();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [card.front, card.pinyin, card.meaning]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -263,15 +298,21 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
             {/* Header with main character (subtle, for reference) */}
             <div className="text-center mb-4">
               <h2
-                className={`text-3xl md:text-4xl font-extrabold cursor-pointer transition-all hover:scale-105 [text-shadow:0_0_18px_rgba(96,165,250,0.22),0_18px_45px_rgba(0,0,0,0.55)] ${getToneClass()}`}
-                onClick={handleFlip}
-                title="Click to see answer"
+                className={`text-3xl md:text-4xl font-extrabold transition-all [text-shadow:0_0_18px_rgba(96,165,250,0.22),0_18px_45px_rgba(0,0,0,0.55)] ${getToneClass()}`}
               >
-                {card.front}
+                {isCharacterVisible ? card.front : "?"}
               </h2>
-              <p className="text-slate-500 text-sm mt-1">
-                {convertPinyinTones(card.pinyin)} • Meaning Map
-              </p>
+              <div className="mt-3 flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsCharacterVisible((prev) => !prev)}
+                  disabled={!canToggleCharacter}
+                  className="border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.08] hover:text-white disabled:border-white/10 disabled:bg-white/[0.02] disabled:text-slate-500"
+                >
+                  {isCharacterVisible ? "Hide character" : "Show character"}
+                </Button>
+              </div>
             </div>
 
             {/* Practice Canvas - Main Focus */}
@@ -279,8 +320,9 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
               character={card.front}
               width={320}
               height={320}
-              showTemplate
+              showTemplate={false}
               showGrid
+              onInteraction={() => setCanToggleCharacter(true)}
             />
 
             {/* Action buttons */}
@@ -304,7 +346,7 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
                 variant="default"
                 size="sm"
                 onClick={handleFlip}
-                className="bg-blue-500/20 border border-blue-500/40 hover:bg-blue-500/30"
+                className="border border-blue-400/40 bg-blue-500/18 text-blue-100 shadow-[0_10px_30px_rgba(59,130,246,0.22)] hover:border-blue-300/60 hover:bg-blue-500/26 hover:text-white"
               >
                 <RotateCw className="w-4 h-4 mr-2" />
                 Show Answer
@@ -332,7 +374,7 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
             {/* Header */}
             <div className="text-center mb-6">
               <h2
-                className={`text-4xl md:text-5xl font-extrabold cursor-pointer transition-all hover:scale-105 [text-shadow:0_0_20px_rgba(96,165,250,0.3),0_20px_40px_rgba(0,0,0,0.5)] ${getToneClass()}`}
+                className={`text-4xl md:text-5xl font-extrabold transition-all [text-shadow:0_0_20px_rgba(96,165,250,0.3),0_20px_40px_rgba(0,0,0,0.5)] ${getToneClass()}`}
                 onClick={handleTTS}
               >
                 {card.front}
@@ -341,7 +383,44 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
                 {convertPinyinTones(card.pinyin)}
               </p>
               <p className="text-slate-300 text-base mt-1">{card.meaning}</p>
+              <div className="mt-4 flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTTS}
+                  className="bg-white/5 border-white/10 hover:bg-blue-500/20"
+                  disabled={!isTTSAvailable}
+                >
+                  <Volume2 className="w-4 h-4 mr-2" />
+                  Listen
+                </Button>
+              </div>
             </div>
+
+            {frontBreakdown && frontBreakdown.segments.length > 0 && (
+              <div className="mb-6 rounded-2xl border border-white/8 bg-white/[0.025] p-4">
+                <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm font-medium text-slate-200">
+                    Character breakdown
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Hover a character or word to inspect it.
+                  </p>
+                </div>
+                <CharacterBreakdown
+                  segments={frontBreakdown.segments}
+                  pinyin={frontBreakdown.pinyin}
+                  translation={frontBreakdown.translation}
+                  literalGloss={frontBreakdown.literalGloss}
+                  variant="compact"
+                  showPinyinLine={false}
+                  showTranslationLine={false}
+                  showLiteralGlossLine={false}
+                  onCharClick={(char) => onTTS?.(char)}
+                  onWordClick={(word) => onTTS?.(word)}
+                />
+              </div>
+            )}
 
             {/* Divider */}
             <div className="h-px bg-gradient-to-r from-transparent via-white/20 to-transparent my-6" />
