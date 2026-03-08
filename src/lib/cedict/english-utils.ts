@@ -125,6 +125,10 @@ export function normalizeClauseOrder(text: string): string {
       /\b(is|are|am|do|does|did|can|could|should|would|will|to)\s+\1\b/gi,
       "$1",
     )
+    .replace(/\bwhy do you not\b/gi, "why don't you")
+    .replace(/\bwhy does he not\b/gi, "why doesn't he")
+    .replace(/\bwhy does she not\b/gi, "why doesn't she")
+    .replace(/\bwhy do we not\b/gi, "why don't we")
     .replace(/\b(what|where|why|how)\s+is\s+you\b/gi, "$1 are you")
     .replace(/\b(what|where|why|how)\s+are\s+i\b/gi, "$1 am I")
     .replace(/\b(why|what|where|how)\s+you\b/gi, "$1 do you")
@@ -330,6 +334,10 @@ export function toPastTense(verbPhrase: string): string {
     have: "had",
     sleep: "slept",
     give: "gave",
+    read: "read",
+    hear: "heard",
+    put: "put",
+    get: "got",
   };
 
   let past = irregularPast[firstWord] || "";
@@ -367,8 +375,12 @@ export function toPastParticiple(verbPhrase: string): string {
     sleep: "slept",
     write: "written",
     give: "given",
+    read: "read",
+    hear: "heard",
     take: "taken",
     find: "found",
+    put: "put",
+    get: "gotten",
   };
 
   const participle = irregularParticiples[firstWord] || toPastTense(firstWord);
@@ -421,6 +433,7 @@ export function addSimpleArticle(subject: string, predicate: string): string {
     "artist",
     "musician",
     "professor",
+    "brother",
   ]);
 
   const firstWord = normalizedPredicate.split(/\s+/)[0]?.toLowerCase() || "";
@@ -499,10 +512,9 @@ export function joinSentenceClauses(
   options?: { linker?: string; punctuation?: "." | "?" },
 ): string {
   const left = sentenceWithoutPunctuation(firstClause).trim();
-  const right = lowercaseFirst(sentenceWithoutPunctuation(secondClause).trim()).replace(
-    /^i\b/,
-    "I",
-  );
+  const right = lowercaseFirst(
+    sentenceWithoutPunctuation(secondClause).trim(),
+  ).replace(/^i\b/, "I");
   if (!left) {
     return makeSentence(right, options?.punctuation === "?");
   }
@@ -532,7 +544,10 @@ export function normalizeArticleChoice(value: string): string {
       POSSESSIVE_PRONOUN_TRANSLATIONS[determiner.toLowerCase()] || match,
   );
 
-  result = result.replace(/\b(a|an)\s+(mine|yours|his|hers|its|ours|theirs)\b/gi, "$2");
+  result = result.replace(
+    /\b(a|an)\s+(mine|yours|his|hers|its|ours|theirs)\b/gi,
+    "$2",
+  );
 
   return result.replace(
     /\b(I|you|he|she|it|we|they|this|that)\s+(am|are|is|was|were)\s+([^,.!?]+)\b/i,
