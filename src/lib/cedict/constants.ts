@@ -108,6 +108,7 @@ export const ADVERB_TRANSLATIONS: Record<string, string> = {
   也: "also",
   都: "all",
   还: "still",
+  快: "quickly",
   常常: "often",
   经常: "often",
   总是: "always",
@@ -202,11 +203,14 @@ export const VERB_TRANSLATIONS: Record<string, string> = {
   去: "go",
   来: "come",
   看: "see",
+  看书: "read",
   吃: "eat",
+  吃饭: "eat",
   喝: "drink",
   学: "study",
   学习: "study",
   说: "speak",
+  说话: "talk",
   听: "listen",
   讲: "speak",
   做: "do",
@@ -243,8 +247,10 @@ export const VERB_TRANSLATIONS: Record<string, string> = {
   帮: "help",
   坐: "sit",
   站: "stand",
+  走: "go",
   等: "wait for",
   让: "let",
+  担心: "worry",
   批评: "criticize",
   骗: "deceive",
   打开: "open",
@@ -536,6 +542,14 @@ export const DYNAMIC_PASSIVE_PARTICIPLES = new Set([
   "sent",
   "given",
 ]);
+
+export const PROGRESSIVE_MARKERS = new Set(["在", "正在"]);
+
+export const NEGATIVE_IMPERATIVE_MARKERS = new Set(["不要", "别"]);
+
+export const IMPERATIVE_POLITENESS_MARKERS = new Set(["请"]);
+
+export const IMPERATIVE_ADVERB_WORDS = new Set(["快"]);
 
 export const SKIPPABLE_TOKENS = new Set([
   "的",

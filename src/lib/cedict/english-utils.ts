@@ -293,6 +293,23 @@ export function toGerund(verbPhrase: string): string {
   return [gerund, ...rest].join(" ");
 }
 
+export function sentenceWithoutPunctuation(text: string): string {
+  return text.replace(/[.?!]+$/, "").trim();
+}
+
+export function normalizeProgressiveEnglish(verbPhrase: string): string {
+  const normalized = verbPhrase.trim();
+  if (!normalized) {
+    return normalized;
+  }
+
+  return normalized
+    .replace(/\beat (?:a |the )?meal\b/gi, "eat")
+    .replace(/\bread (?:a |the )?book\b/gi, "read")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function toPastTense(verbPhrase: string): string {
   const [firstWord, ...rest] = verbPhrase.trim().split(/\s+/);
   if (!firstWord) {

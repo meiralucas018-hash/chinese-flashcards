@@ -53,9 +53,57 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
     expectedTranslationIncludes: ["who", "call", "phone"],
     expectedTranslationExcludes: ["for who", "give"],
   },
-  { sentence: "我在吃饭。", expectedTranslationIncludes: ["i am", "eating"] },
+  {
+    sentence: "我在吃饭。",
+    expectedTranslationIncludes: ["i am", "eating"],
+    expectedTranslationExcludes: ["have a meal", "at eat", "to have"],
+  },
   { sentence: "我们比他们忙。", expectedTranslationIncludes: ["more", "than"] },
-  { sentence: "不要说话。", expectedTranslationIncludes: ["do not", "speak"] },
+  {
+    sentence: "不要说话。",
+    expectedTranslationIncludes: ["do not", "talk"],
+    expectedTranslationExcludes: ["you do not", "speak", "don't!"],
+  },
+  {
+    sentence: "他在看书。",
+    expectedTranslationIncludes: ["he is", "reading"],
+    expectedTranslationExcludes: ["to read", "see book", "at read"],
+  },
+  {
+    sentence: "我们正在学习。",
+    expectedTranslationIncludes: ["we are", "studying"],
+    expectedTranslationExcludes: ["currently study", "just at"],
+  },
+  {
+    sentence: "我在学校。",
+    expectedTranslationIncludes: ["i am", "school"],
+    expectedTranslationExcludes: ["studying", "eating"],
+  },
+  {
+    sentence: "你在做什么？",
+    expectedTranslationIncludes: ["what", "you", "doing"],
+    expectedTranslationExcludes: ["doing what", "at do"],
+  },
+  {
+    sentence: "别说话。",
+    expectedTranslationIncludes: ["do not", "talk"],
+    expectedTranslationExcludes: ["leave", "speak", "you do not"],
+  },
+  {
+    sentence: "请坐。",
+    expectedTranslationIncludes: ["please", "sit"],
+    expectedTranslationExcludes: ["ask sit", "request"],
+  },
+  {
+    sentence: "不要吃这个。",
+    expectedTranslationIncludes: ["do not", "eat", "this"],
+    expectedTranslationExcludes: ["you do not", "don't!"],
+  },
+  {
+    sentence: "别担心。",
+    expectedTranslationIncludes: ["do not", "worry"],
+    expectedTranslationExcludes: ["leave anxious", "you do not"],
+  },
   {
     sentence: "我找不到。",
     expectedTranslationIncludes: ["cannot find"],
@@ -209,7 +257,11 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
     sentence: "他被老师批评了",
     expectedSource: "rule",
     expectedTranslationIncludes: ["was", "criticized", "teacher"],
-    expectedTranslationExcludes: ["quilt", "to criticize", "by teacher criticize"],
+    expectedTranslationExcludes: [
+      "quilt",
+      "to criticize",
+      "by teacher criticize",
+    ],
   },
   {
     sentence: "我被他骗了",

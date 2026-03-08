@@ -5,13 +5,17 @@ import {
   DEMONSTRATIVE_TRANSLATIONS,
   DESIDERATIVE_TRANSLATIONS,
   DYNAMIC_PASSIVE_PARTICIPLES,
+  IMPERATIVE_ADVERB_WORDS,
+  IMPERATIVE_POLITENESS_MARKERS,
   LOCATION_QUESTION_WORDS,
   MEASURE_WORDS,
   MODAL_TRANSLATIONS,
+  NEGATIVE_IMPERATIVE_MARKERS,
   NOUN_TRANSLATIONS,
   NUMBER_TRANSLATIONS,
   OBJECT_TRANSLATIONS,
   POSSESSIVE_TRANSLATIONS,
+  PROGRESSIVE_MARKERS,
   QUESTION_WORD_TRANSLATIONS,
   RESULTATIVE_VERB_TRANSLATIONS,
   SUBJECT_TRANSLATIONS,
@@ -34,10 +38,12 @@ import {
   isQuestionMarkToken,
   makeSentence,
   normalizeClauseOrder,
+  normalizeProgressiveEnglish,
   possessiveForSubject,
   possessivePronounForDeterminer,
   pluralizeEnglishNoun,
   replaceStandaloneObject,
+  sentenceWithoutPunctuation,
   stripClassifierGloss,
   toGerund,
   toPastParticiple,
@@ -126,6 +132,19 @@ type ComplementStructure = {
   expressesFailedResult: boolean;
   expressesPerceptibility: boolean;
   expressesFeasibility: boolean;
+};
+
+type ProgressiveStructure = {
+  marker: string;
+  locationTokens: RuleToken[];
+  actionTokens: RuleToken[];
+};
+
+type ImperativeStructure = {
+  isNegative: boolean;
+  politenessMarker: boolean;
+  leadingAdverbWords: string[];
+  actionTokens: RuleToken[];
 };
 
 const ACTION_HINTS: Record<string, ActionHint> = {
@@ -779,7 +798,9 @@ function detectComplementStructure(
   };
 }
 
-function detectAbilityComplement(structure: ComplementStructure | null): boolean {
+function detectAbilityComplement(
+  structure: ComplementStructure | null,
+): boolean {
   return Boolean(structure?.expressesAbility);
 }
 
@@ -788,8 +809,8 @@ function detectResultativeComplement(
 ): boolean {
   return Boolean(
     structure &&
-      (Boolean(structure.meaning) ||
-        Boolean(RESULTATIVE_VERB_TRANSLATIONS[structure.lexicalKey])),
+    (Boolean(structure.meaning) ||
+      Boolean(RESULTATIVE_VERB_TRANSLATIONS[structure.lexicalKey])),
   );
 }
 
@@ -888,11 +909,16 @@ function buildFeasibilitySentence(
       return makeSentence(clause, false);
     }
 
-    return makeSentence(hasStill ? "There is still time" : "There is time", false);
+    return makeSentence(
+      hasStill ? "There is still time" : "There is time",
+      false,
+    );
   }
 
   if (isQuestion) {
-    const predicate = realizeComplementPredicate(structure, { forQuestion: true });
+    const predicate = realizeComplementPredicate(structure, {
+      forQuestion: true,
+    });
     return predicate
       ? buildYesNoQuestion(subject, "modal", predicate, { modal: "can" })
       : null;
@@ -923,6 +949,242 @@ function addDefiniteArticleIfNeeded(phrase: string): string {
   }
 
   return `the ${normalized}`;
+}
+
+function findQuestionWordToken(tokens: RuleToken[]): RuleToken | null {
+  return (
+    tokens.find((token) => Boolean(QUESTION_WORD_TRANSLATIONS[token.word])) ||
+    null
+  );
+}
+
+function translateLocationModifier(tokens: RuleToken[]): string {
+  if (tokens.length === 0) {
+    return "";
+  }
+
+  const withoutInnerMarker =
+    tokens[tokens.length - 1]?.word === "里" ? tokens.slice(0, -1) : tokens;
+  const rawLocation = translateNaturalPhrase(withoutInnerMarker, {
+    asObject: false,
+  });
+  if (!rawLocation) {
+    return "";
+  }
+
+  const locationNoun =
+    /^(school|home|work)\b/i.test(rawLocation) || /^(the )/i.test(rawLocation)
+      ? rawLocation
+      : addDefiniteArticleIfNeeded(rawLocation);
+  return formatLocationPhrase(locationNoun, "static");
+}
+
+function detectProgressiveStructure(
+  context: RuleContext,
+): ProgressiveStructure | null {
+  if (!context.subject) {
+    return null;
+  }
+
+  if (context.head === "在") {
+    const actionIndex = findFirstVerbIndex(context.tail);
+    if (actionIndex === -1) {
+      return null;
+    }
+
+    return {
+      marker: "在",
+      locationTokens: context.tail.slice(0, actionIndex),
+      actionTokens: context.tail.slice(actionIndex),
+    };
+  }
+
+  const hasProgressiveMarker = context.tokens.some((token) =>
+    PROGRESSIVE_MARKERS.has(token.word),
+  );
+  if (!hasProgressiveMarker && !context.adverbs.includes("currently")) {
+    return null;
+  }
+
+  if (!context.head || !VERB_TRANSLATIONS[context.head]) {
+    return null;
+  }
+
+  return {
+    marker: context.tokens.find((token) => PROGRESSIVE_MARKERS.has(token.word))
+      ?.word || "正在",
+    locationTokens: [],
+    actionTokens: context.predicateTokens,
+  };
+}
+
+function realizeProgressiveVerbPhrase(structure: ProgressiveStructure): {
+  action: string;
+  location: string;
+} | null {
+  const actionPhrase = translateVerbPhrase(structure.actionTokens);
+  const normalizedAction = normalizeProgressiveEnglish(actionPhrase.text);
+  if (!actionPhrase.isVerbPhrase || !normalizedAction) {
+    return null;
+  }
+
+  return {
+    action: normalizedAction,
+    location: translateLocationModifier(structure.locationTokens),
+  };
+}
+
+function buildProgressiveQuestionSentence(
+  subject: string,
+  structure: ProgressiveStructure,
+): string | null {
+  const questionToken = findQuestionWordToken(structure.actionTokens);
+  if (!questionToken) {
+    return null;
+  }
+
+  const translatedQuestion = QUESTION_WORD_TRANSLATIONS[questionToken.word];
+  if (!translatedQuestion) {
+    return null;
+  }
+
+  const filteredActionTokens = structure.actionTokens.filter(
+    (token) => token !== questionToken,
+  );
+  const actionPhrase = translateVerbPhrase(filteredActionTokens);
+  if (!actionPhrase.text) {
+    return null;
+  }
+
+  const progressiveVerb = toGerund(normalizeProgressiveEnglish(actionPhrase.text));
+  const location = translateLocationModifier(structure.locationTokens);
+  const predicate = [progressiveVerb, location].filter(Boolean).join(" ");
+
+  return buildWhQuestion(translatedQuestion, subject, "be", predicate);
+}
+
+function buildProgressiveClause(
+  subject: string,
+  structure: ProgressiveStructure,
+  isQuestion: boolean,
+  isNegative: boolean,
+  adverbs: string[],
+): string | null {
+  const realized = realizeProgressiveVerbPhrase(structure);
+  if (!realized) {
+    return null;
+  }
+
+  const progressiveAction = toGerund(realized.action);
+  const progressivePredicate = [progressiveAction, realized.location]
+    .filter(Boolean)
+    .join(" ");
+  const clause = isQuestion
+    ? sentenceWithoutPunctuation(buildYesNoQuestion(subject, "be", progressivePredicate))
+    : `${subject} ${beForm(subject)}${isNegative ? " not" : ""} ${progressivePredicate}`;
+
+  return makeSentence(
+    normalizeClauseOrder(applyAdverbsToClause(clause, subject, adverbs)),
+    isQuestion,
+  );
+}
+
+function detectImperativeStructure(tokens: RuleToken[]): ImperativeStructure | null {
+  if (tokens.length === 0) {
+    return null;
+  }
+
+  let index = 0;
+  let isNegative = false;
+  let politenessMarker = false;
+  const leadingAdverbWords: string[] = [];
+
+  if (NEGATIVE_IMPERATIVE_MARKERS.has(tokens[index].word)) {
+    isNegative = true;
+    index += 1;
+  } else if (tokens[index].word === "不" && tokens[index + 1]) {
+    isNegative = true;
+    index += 1;
+  }
+
+  if (IMPERATIVE_POLITENESS_MARKERS.has(tokens[index]?.word || "")) {
+    politenessMarker = true;
+    index += 1;
+  }
+
+  while (IMPERATIVE_ADVERB_WORDS.has(tokens[index]?.word || "")) {
+    leadingAdverbWords.push(tokens[index].word);
+    index += 1;
+  }
+
+  if (IMPERATIVE_POLITENESS_MARKERS.has(tokens[index]?.word || "")) {
+    politenessMarker = true;
+    index += 1;
+  }
+
+  const actionTokens = tokens.slice(index).filter(
+    (token) => !isPunctuationToken(token.word),
+  );
+  if (actionTokens.length === 0) {
+    return null;
+  }
+
+  const firstActionWord = actionTokens[0].word;
+  const combinedWord = `${firstActionWord}${actionTokens[1]?.word || ""}`;
+  const looksVerbal =
+    Boolean(VERB_TRANSLATIONS[firstActionWord]) ||
+    Boolean(VERB_TRANSLATIONS[combinedWord]) ||
+    Boolean(RESULTATIVE_VERB_TRANSLATIONS[combinedWord]);
+  if (!looksVerbal) {
+    return null;
+  }
+
+  return {
+    isNegative,
+    politenessMarker,
+    leadingAdverbWords,
+    actionTokens,
+  };
+}
+
+function imperativeVerbOverride(verb: string): string {
+  if (verb === "see") {
+    return "look";
+  }
+
+  return verb;
+}
+
+function buildImperativePredicate(structure: ImperativeStructure): string | null {
+  const actionPhrase = translateVerbPhrase(structure.actionTokens);
+  const combinedWord = `${structure.actionTokens[0]?.word || ""}${structure.actionTokens[1]?.word || ""}`;
+  const explicitVerb =
+    RESULTATIVE_VERB_TRANSLATIONS[combinedWord] ||
+    VERB_TRANSLATIONS[structure.actionTokens[0]?.word || ""] ||
+    VERB_TRANSLATIONS[combinedWord];
+  const predicate = actionPhrase.isVerbPhrase
+    ? actionPhrase.text
+    : normalizeVerbObjectPhrase(
+        imperativeVerbOverride(explicitVerb || ""),
+        translateNaturalPhrase(structure.actionTokens.slice(explicitVerb === VERB_TRANSLATIONS[combinedWord] ? 1 : 1), {
+          asObject: true,
+        }),
+      );
+
+  const normalizedPredicate = normalizeProgressiveEnglish(predicate)
+    .replace(/^see\b/i, "look")
+    .replace(/\bspeak\b/i, "talk")
+    .trim();
+  if (!normalizedPredicate) {
+    return null;
+  }
+
+  const adverbText = structure.leadingAdverbWords
+    .map((word) => ADVERB_TRANSLATIONS[word] || cleanLexicalMeaning(word))
+    .filter(Boolean)
+    .join(" ");
+
+  return [normalizedPredicate, adverbText].filter(Boolean).join(" ").trim();
 }
 
 function extractActionCore(tokens: RuleToken[]): ActionCore | null {
@@ -1016,7 +1278,8 @@ function detectTransferStructure(
     patient = action.defaultObject;
   }
 
-  const verb = action.recipientVerb && patient ? action.recipientVerb : action.verb;
+  const verb =
+    action.recipientVerb && patient ? action.recipientVerb : action.verb;
   const useIndirectObject =
     !action.benefactive &&
     patient.length > 0 &&
@@ -1070,7 +1333,10 @@ function detectPassiveStructure(tokens: RuleToken[]): PassiveStructure | null {
   };
 }
 
-function buildTransferSentence(subject: string, structure: TransferStructure): string {
+function buildTransferSentence(
+  subject: string,
+  structure: TransferStructure,
+): string {
   const finiteVerb = structure.isPast
     ? toPastTense(structure.verb)
     : conjugateVerb(subject, structure.verb);
@@ -1082,10 +1348,7 @@ function buildTransferSentence(subject: string, structure: TransferStructure): s
     const tail = [patient, `for ${structure.recipient}`]
       .filter(Boolean)
       .join(" ");
-    return makeSentence(
-      `${subject} ${finiteVerb} ${tail}`.trim(),
-      false,
-    );
+    return makeSentence(`${subject} ${finiteVerb} ${tail}`.trim(), false);
   }
 
   if (structure.verb === "call") {
@@ -1285,7 +1548,7 @@ function buildProgressiveSentence(
   isNegative: boolean,
   adverbs: string[],
 ): string {
-  const progressiveAction = toGerund(actionPhrase);
+  const progressiveAction = toGerund(normalizeProgressiveEnglish(actionPhrase));
   const clause = isQuestion
     ? buildYesNoQuestion(subject, "be", progressiveAction).replace(/[?.!]$/, "")
     : `${subject} ${beForm(subject)}${isNegative ? " not" : ""} ${progressiveAction}`;
@@ -1313,45 +1576,22 @@ function buildComparisonSentence(
 }
 
 function buildImperativeSentence(tokens: RuleToken[]): string | null {
-  if (tokens.length === 0) {
+  const structure = detectImperativeStructure(tokens);
+  if (!structure) {
     return null;
   }
 
-  if (tokens[0].word === "不要" || (tokens[0].word === "不" && tokens[1])) {
-    const verbIndex = 1;
-    const combinedWord = `${tokens[verbIndex]?.word || ""}${tokens[verbIndex + 1]?.word || ""}`;
-    const verb =
-      RESULTATIVE_VERB_TRANSLATIONS[combinedWord] ||
-      VERB_TRANSLATIONS[tokens[verbIndex]?.word || ""];
-    if (!verb) {
-      return null;
-    }
-    const objectTokens = RESULTATIVE_VERB_TRANSLATIONS[combinedWord]
-      ? tokens.slice(verbIndex + 2)
-      : tokens.slice(verbIndex + 1);
-
-    return makeSentence(
-      `Do not ${normalizeVerbObjectPhrase(verb, translatePhrase(objectTokens, true))}`.trim(),
-      false,
-    );
-  }
-
-  const combinedWord = `${tokens[0].word}${tokens[1]?.word || ""}`;
-  const verb =
-    RESULTATIVE_VERB_TRANSLATIONS[combinedWord] ||
-    VERB_TRANSLATIONS[tokens[0].word];
-  if (!verb) {
+  const predicate = buildImperativePredicate(structure);
+  if (!predicate) {
     return null;
   }
 
-  const offset = RESULTATIVE_VERB_TRANSLATIONS[combinedWord] ? 2 : 1;
-  return makeSentence(
-    normalizeVerbObjectPhrase(
-      verb,
-      translatePhrase(tokens.slice(offset), true),
-    ),
-    false,
-  );
+  const clause = structure.isNegative
+    ? `Do not ${predicate}`
+    : structure.politenessMarker
+      ? `Please ${predicate}`
+      : predicate;
+  return makeSentence(normalizeClauseOrder(clause), false);
 }
 
 function buildComplementSentence(
@@ -1375,7 +1615,10 @@ function buildComplementSentence(
       );
     }
 
-    if (detectAbilityComplement(complement) || detectResultativeComplement(complement)) {
+    if (
+      detectAbilityComplement(complement) ||
+      detectResultativeComplement(complement)
+    ) {
       return buildAbilityComplementSentence(
         subject,
         complement,
@@ -1411,7 +1654,10 @@ function buildComplementSentence(
   return null;
 }
 
-function buildPassiveSentence(subject: string, structure: PassiveStructure): string {
+function buildPassiveSentence(
+  subject: string,
+  structure: PassiveStructure,
+): string {
   const participle =
     structure.passiveParticiple || toPastParticiple(structure.verbPhrase);
   const passiveAuxiliary =
@@ -1777,7 +2023,8 @@ function buildContext(wordSegments: WordSegment[]): RuleContext | null {
     leadingTimeTokens = tokens.slice(0, cursor);
 
     const subjectlessTokens = tokens.slice(cursor);
-    const subjectlessRemainder = splitLeadingAdverbs(subjectlessTokens).remainder;
+    const subjectlessRemainder =
+      splitLeadingAdverbs(subjectlessTokens).remainder;
     const subjectlessComplement = detectComplementStructure(
       subjectlessRemainder[0]?.word,
       subjectlessRemainder.slice(1),
@@ -1919,6 +2166,30 @@ function matchQuestionWordRule(context: RuleContext): string | null {
   return sentence ? withSentenceContext(sentence, context.timePhrase) : null;
 }
 
+function matchProgressiveRule(context: RuleContext): string | null {
+  const progressive = detectProgressiveStructure(context);
+  if (!progressive) {
+    return null;
+  }
+
+  const questionSentence = buildProgressiveQuestionSentence(
+    context.subject,
+    progressive,
+  );
+  if (questionSentence) {
+    return withSentenceContext(questionSentence, context.timePhrase);
+  }
+
+  const sentence = buildProgressiveClause(
+    context.subject,
+    progressive,
+    context.isQuestion,
+    false,
+    context.adverbs.filter((adverb) => adverb !== "currently"),
+  );
+  return sentence ? withSentenceContext(sentence, context.timePhrase) : null;
+}
+
 function matchShiPredicateRule(context: RuleContext): string | null {
   if (context.head !== "是") {
     return null;
@@ -1954,9 +2225,12 @@ function matchBaRule(context: RuleContext): string | null {
 
   const giveIndex = context.tail.findIndex((token) => token.word === "给");
   if (giveIndex > 0) {
-    const transfer = detectTransferStructure(context.tail.slice(giveIndex + 1), {
-      patientTokens: context.tail.slice(0, giveIndex),
-    });
+    const transfer = detectTransferStructure(
+      context.tail.slice(giveIndex + 1),
+      {
+        patientTokens: context.tail.slice(0, giveIndex),
+      },
+    );
     if (transfer) {
       return withSentenceContext(
         buildTransferSentence(context.subject, transfer),
@@ -2122,20 +2396,6 @@ function matchHenPredicateRule(context: RuleContext): string | null {
 function matchZaiLocationRule(context: RuleContext): string | null {
   if (context.head !== "在") {
     return null;
-  }
-
-  const actionPhrase = translateVerbPhrase(context.tail);
-  if (actionPhrase.isVerbPhrase) {
-    return withSentenceContext(
-      buildProgressiveSentence(
-        context.subject,
-        actionPhrase.text,
-        context.isQuestion,
-        false,
-        context.adverbs,
-      ),
-      context.timePhrase,
-    );
   }
 
   const location = translatePhrase(context.tail, false);
@@ -2396,6 +2656,7 @@ function matchFallbackPredicateRule(context: RuleContext): string | null {
 const ORDERED_RULES: RuleMatcher[] = [
   matchImperativeRule,
   matchComplementRule,
+  matchProgressiveRule,
   matchANotARule,
   matchQuestionWordRule,
   matchShiPredicateRule,
