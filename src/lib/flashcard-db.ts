@@ -274,6 +274,15 @@ function normalizeUsageExample(
     sentence: toString(example.sentence),
     pinyin: toString(example.pinyin),
     translation: toString(example.translation),
+    literalGloss: toString(example.literalGloss),
+    translationSource:
+      example.translationSource === "exact" ||
+      example.translationSource === "rule" ||
+      example.translationSource === "fallback"
+        ? example.translationSource
+        : undefined,
+    confidence:
+      typeof example.confidence === "number" ? example.confidence : undefined,
     breakdown,
   };
 }
@@ -423,6 +432,17 @@ export function ensureCardFields(card: Partial<Card>): Card {
       sentence: toString(card.exampleBreakdown?.sentence, card.example || ""),
       pinyin: toString(card.exampleBreakdown?.pinyin),
       translation: toString(card.exampleBreakdown?.translation),
+      literalGloss: toString(card.exampleBreakdown?.literalGloss),
+      translationSource:
+        card.exampleBreakdown?.translationSource === "exact" ||
+        card.exampleBreakdown?.translationSource === "rule" ||
+        card.exampleBreakdown?.translationSource === "fallback"
+          ? card.exampleBreakdown.translationSource
+          : "fallback",
+      confidence:
+        typeof card.exampleBreakdown?.confidence === "number"
+          ? card.exampleBreakdown.confidence
+          : undefined,
       segments: normalizedExampleBreakdownSegments,
     },
     ...(normalizedUsageExamples && normalizedUsageExamples.length > 0

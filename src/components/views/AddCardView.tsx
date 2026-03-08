@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  CircleHelp,
   Check,
   FolderOpen,
   Loader2,
@@ -43,6 +44,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 
 export interface NewCardFormState {
   front: string;
@@ -193,6 +199,50 @@ function EditableCardRow({
       </div>
       <div className="text-sm text-slate-400">{card.meaning}</div>
     </div>
+  );
+}
+
+function formatTranslationSource(
+  source: "exact" | "rule" | "fallback",
+): string {
+  if (source === "exact") {
+    return "Exact dictionary";
+  }
+  if (source === "rule") {
+    return "Rule-based";
+  }
+
+  return "Literal fallback";
+}
+
+function getTranslationSourceExplanation(
+  source: "exact" | "rule" | "fallback",
+): string {
+  if (source === "exact") {
+    return "This sentence matched a direct CEDICT entry, so the app used the dictionary gloss first.";
+  }
+  if (source === "rule") {
+    return "This sentence was segmented locally and then rewritten with the offline rule pipeline.";
+  }
+
+  return "No stronger match was found, so the app kept a more literal gloss from the segmented meanings.";
+}
+
+function shouldShowLiteralGloss(
+  translation: string,
+  literalGloss?: string,
+): boolean {
+  const normalizedLiteralGloss = literalGloss?.trim() || "";
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[.?!,;:]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  return (
+    Boolean(normalizedLiteralGloss) &&
+    normalize(translation) !== normalize(normalizedLiteralGloss)
   );
 }
 
@@ -349,13 +399,65 @@ export default function AddCardView({
             {analysisPreview && (
               <div className="mt-2 p-3 bg-slate-800/50 border border-blue-500/30 rounded-lg">
                 <p className="text-xs text-slate-400 mb-2">Analysis preview</p>
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                  <span className="rounded-full border border-blue-400/30 bg-blue-500/10 px-2 py-1 text-blue-200">
+                    {formatTranslationSource(analysisPreview.translationSource)}
+                  </span>
+                  <HoverCard>
+                    <HoverCardTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-600/70 bg-slate-900/70 px-2 py-1 text-slate-300 transition-colors hover:border-slate-500 hover:text-white"
+                      >
+                        <CircleHelp className="h-3.5 w-3.5" />
+                        Why this?
+                      </button>
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-72 border-slate-700 bg-slate-950 text-slate-200">
+                      <p className="text-sm leading-6">
+                        {getTranslationSourceExplanation(
+                          analysisPreview.translationSource,
+                        )}
+                      </p>
+                    </HoverCardContent>
+                  </HoverCard>
+                  {typeof analysisPreview.confidence === "number" && (
+                    <span className="text-slate-400">
+                      Confidence {Math.round(analysisPreview.confidence * 100)}%
+                    </span>
+                  )}
+                </div>
                 <CharacterBreakdown
                   segments={analysisPreview.segments}
                   pinyin={analysisPreview.pinyin || formState.examplePinyin}
                   translation={
                     analysisPreview.translation || formState.exampleTranslation
                   }
+                  literalGloss={analysisPreview.literalGloss}
                 />
+                {shouldShowLiteralGloss(
+                  analysisPreview.translation,
+                  analysisPreview.literalGloss,
+                ) && (
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <div className="rounded-lg border border-slate-700/80 bg-slate-900/60 p-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Translation
+                      </p>
+                      <p className="mt-1 text-sm text-slate-200">
+                        {analysisPreview.translation}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-slate-700/80 bg-slate-900/60 p-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Literal Gloss
+                      </p>
+                      <p className="mt-1 text-sm text-slate-300">
+                        {analysisPreview.literalGloss || "-"}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

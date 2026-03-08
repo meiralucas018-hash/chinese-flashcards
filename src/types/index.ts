@@ -20,12 +20,18 @@ export interface ExampleBreakdown {
   sentence: string;
   pinyin: string;
   translation: string;
+  literalGloss?: string;
+  translationSource: "exact" | "rule" | "fallback";
+  confidence?: number;
   segments: Segment[];
 }
 
 export interface SentenceAnalysis {
   sentence: string;
   translation: string;
+  literalGloss?: string;
+  translationSource: "exact" | "rule" | "fallback";
+  confidence?: number;
   pinyin: string;
   segments: Segment[];
   characters: CardChar[];
@@ -37,6 +43,9 @@ export interface UsageExample {
   sentence: string; // Chinese sentence
   pinyin: string; // Pinyin with tone marks
   translation: string; // English translation
+  literalGloss?: string;
+  translationSource?: "exact" | "rule" | "fallback";
+  confidence?: number;
   breakdown: Segment[]; // Character breakdown
 }
 

@@ -4,8 +4,8 @@ Offline-first Chinese flashcards app built with Next.js + Capacitor.
 
 ## Highlights
 
-- Fully local data flow (IndexedDB + local CC-CEDICT file)
-- No backend, no external API dependency
+- Local flashcard data flow (IndexedDB + local CC-CEDICT file)
+- Local rule-based sentence translation
 - Static export compatible (`output: "export"`)
 - Android-ready via Capacitor
 - SRS review flow with writing practice canvas and keyboard shortcuts
@@ -18,6 +18,22 @@ Offline-first Chinese flashcards app built with Next.js + Capacitor.
 - CEDICT utilities: `src/lib/cedict.ts`
 - Local persistence: `src/lib/flashcard-db.ts`
 - SRS logic: `src/lib/srs.ts`
+
+## Translation
+
+The **Analyze Sentence Structure** action now uses a fully local rule-based
+translator built on top of sentence segmentation and CEDICT meanings.
+
+Current local coverage focuses on common learner sentence patterns:
+
+- `A 是 B`
+- `A 有 B`
+- `A 在 B`
+- adjective predicates such as `我很好`
+- simple negation with `不`, `没`, `没有`
+- yes/no questions with `吗`, `?`, `？`
+- simple verb-object sentences such as `我喜欢中文`
+- time phrases, possessives, and common adverbs
 
 ## Development
 

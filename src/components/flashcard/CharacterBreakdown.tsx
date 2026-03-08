@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import type { Segment, CardChar } from "@/types";
 import { convertPinyinTones } from "@/lib/pinyin";
 import {
@@ -14,6 +14,7 @@ interface CharacterBreakdownProps {
   segments: Segment[];
   pinyin?: string;
   translation?: string;
+  literalGloss?: string;
   onCharClick?: (char: string) => void;
   onWordClick?: (word: string) => void;
 }
@@ -22,11 +23,10 @@ export default function CharacterBreakdown({
   segments,
   pinyin,
   translation,
+  literalGloss,
   onCharClick,
   onWordClick,
 }: CharacterBreakdownProps) {
-  const [activeWord, setActiveWord] = useState<string | null>(null);
-
   const handleCharClick = (e: React.MouseEvent, char: string) => {
     e.stopPropagation();
     onCharClick?.(char);
@@ -53,70 +53,65 @@ export default function CharacterBreakdown({
               return (
                 <span
                   key={`${word}-${segIndex}`}
-                  className={`inline-flex items-end mr-0.5 rounded px-0.5 ${segment.isWord ? "border-b-2 border-dashed border-purple-500/60 hover:border-purple-400" : "hover:bg-blue-500/10"}`}
-                  onMouseEnter={() => setActiveWord(`${word}-${segIndex}`)}
-                  onMouseLeave={() => setActiveWord(null)}
+                  className={`relative inline-flex items-end mr-0.5 rounded px-0.5 ${segment.isWord ? "pb-1" : "hover:bg-blue-500/10"}`}
                 >
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        className="inline-flex gap-0.5 rounded text-left"
-                        onClick={(event) => handleWordClick(event, word)}
-                      >
-                        {segment.chars.map((charInfo, charIndex) => (
-                          <Tooltip
-                            key={`${word}-${charInfo.char}-${charIndex}`}
+                  <span className="inline-flex gap-0.5 rounded text-left">
+                    {segment.chars.map((charInfo, charIndex) => (
+                      <Tooltip key={`${word}-${charInfo.char}-${charIndex}`}>
+                        <TooltipTrigger asChild>
+                          <span
+                            className="rounded px-0.5 cursor-pointer transition-colors hover:bg-blue-500/20 hover:text-blue-300"
+                            onClick={(event) =>
+                              handleCharClick(event, charInfo.char)
+                            }
                           >
-                            <TooltipTrigger asChild>
-                              <span
-                                className="rounded px-0.5 cursor-pointer transition-colors hover:bg-blue-500/20 hover:text-blue-300"
-                                onClick={(event) =>
-                                  handleCharClick(event, charInfo.char)
-                                }
-                              >
-                                {charInfo.char}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent
-                              sideOffset={6}
-                              className="max-w-[260px] bg-slate-900 border border-blue-500/50 text-slate-100"
-                            >
-                              <div className="text-xs">
-                                <div className="font-semibold text-blue-300">
-                                  {charInfo.char}
-                                </div>
-                                {charInfo.pinyin && (
-                                  <div>
-                                    {convertPinyinTones(charInfo.pinyin)}
-                                  </div>
-                                )}
-                                <div className="text-slate-300">
-                                  {charInfo.meaning || "No meaning available"}
-                                </div>
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        ))}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      sideOffset={8}
-                      className="max-w-[320px] bg-slate-900 border border-purple-400/50 text-slate-100"
-                    >
-                      <div className="text-xs">
-                        <div className="font-semibold text-purple-300">
-                          {word}
+                            {charInfo.char}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          sideOffset={6}
+                          className="max-w-[260px] bg-slate-900 border border-blue-500/50 text-slate-100"
+                        >
+                          <div className="text-xs">
+                            <div className="font-semibold text-blue-300">
+                              {charInfo.char}
+                            </div>
+                            {charInfo.pinyin && (
+                              <div>{convertPinyinTones(charInfo.pinyin)}</div>
+                            )}
+                            <div className="text-slate-300">
+                              {charInfo.meaning || "No meaning available"}
+                            </div>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </span>
+                  {segment.isWord && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={`Show details for ${word}`}
+                          className="absolute inset-x-0 bottom-0 h-1.5 rounded-sm border-b-2 border-dashed border-purple-500/60 transition-colors hover:border-purple-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/70"
+                          onClick={(event) => handleWordClick(event, word)}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent
+                        sideOffset={8}
+                        className="max-w-[320px] bg-slate-900 border border-purple-400/50 text-slate-100"
+                      >
+                        <div className="text-xs">
+                          <div className="font-semibold text-purple-300">
+                            {word}
+                          </div>
+                          {segment.pinyin && (
+                            <div>{convertPinyinTones(segment.pinyin)}</div>
+                          )}
+                          <div className="text-slate-300">{wordTooltip}</div>
                         </div>
-                        {segment.pinyin && (
-                          <div>{convertPinyinTones(segment.pinyin)}</div>
-                        )}
-                        <div className="text-slate-300">{wordTooltip}</div>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                  {activeWord === `${word}-${segIndex}` && segment.isWord && (
-                    <span className="sr-only">{word}</span>
+                      </TooltipContent>
+                    </Tooltip>
                   )}
                 </span>
               );
@@ -134,6 +129,12 @@ export default function CharacterBreakdown({
       {translation && (
         <div className="translation-line text-slate-400 italic text-sm mt-1">
           {translation}
+        </div>
+      )}
+
+      {literalGloss && (
+        <div className="text-xs text-slate-500 mt-1">
+          Literal: {literalGloss}
         </div>
       )}
     </div>

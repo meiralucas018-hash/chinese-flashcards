@@ -2,6 +2,11 @@
 
 import React, { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { Card as CardType, Rating, UsageExample } from "@/types";
 import { convertPinyinTones, getToneColor } from "@/lib/pinyin";
 import {
@@ -11,12 +16,125 @@ import {
 } from "@/lib/srs";
 import PracticeCanvas from "./PracticeCanvas";
 import CharacterBreakdown from "./CharacterBreakdown";
-import { Volume2, RotateCw, Undo2 } from "lucide-react";
+import { CircleHelp, Volume2, RotateCw, Undo2 } from "lucide-react";
 
 interface FlashcardProps {
   card: CardType;
   onRate: (cardId: string, rating: Rating, updates: Partial<CardType>) => void;
   onTTS?: (text: string) => void;
+}
+
+function formatTranslationSource(
+  source: "exact" | "rule" | "fallback",
+): string {
+  if (source === "exact") {
+    return "Exact dictionary";
+  }
+  if (source === "rule") {
+    return "Rule-based";
+  }
+
+  return "Literal fallback";
+}
+
+function getTranslationSourceExplanation(
+  source: "exact" | "rule" | "fallback",
+): string {
+  if (source === "exact") {
+    return "This translation came from a direct sentence-level dictionary match.";
+  }
+  if (source === "rule") {
+    return "This translation was built from the offline segmentation and rule pipeline.";
+  }
+
+  return "This translation is the literal gloss fallback from the segmented dictionary meanings.";
+}
+
+function shouldShowLiteralGloss(
+  translation: string,
+  literalGloss?: string,
+): boolean {
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[.?!,;:]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  return (
+    Boolean(literalGloss?.trim()) &&
+    normalize(translation) !== normalize(literalGloss || "")
+  );
+}
+
+function TranslationMetadata({
+  translation,
+  literalGloss,
+  translationSource,
+  confidence,
+  tone = "purple",
+}: {
+  translation: string;
+  literalGloss?: string;
+  translationSource?: "exact" | "rule" | "fallback";
+  confidence?: number;
+  tone?: "purple" | "blue";
+}) {
+  if (!translationSource) {
+    return null;
+  }
+
+  const badgeClass =
+    tone === "blue"
+      ? "border-blue-400/30 bg-blue-500/10 text-blue-200"
+      : "border-purple-400/30 bg-purple-500/10 text-purple-200";
+
+  return (
+    <div className="mb-3">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+        <span className={`rounded-full border px-2 py-1 ${badgeClass}`}>
+          {formatTranslationSource(translationSource)}
+        </span>
+        <HoverCard>
+          <HoverCardTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-full border border-slate-600/70 bg-slate-900/70 px-2 py-1 text-slate-300 transition-colors hover:border-slate-500 hover:text-white"
+            >
+              <CircleHelp className="h-3.5 w-3.5" />
+              Why this?
+            </button>
+          </HoverCardTrigger>
+          <HoverCardContent className="w-72 border-slate-700 bg-slate-950 text-slate-200">
+            <p className="text-sm leading-6">
+              {getTranslationSourceExplanation(translationSource)}
+            </p>
+          </HoverCardContent>
+        </HoverCard>
+        {typeof confidence === "number" && (
+          <span className="text-slate-400">
+            Confidence {Math.round(confidence * 100)}%
+          </span>
+        )}
+      </div>
+      {shouldShowLiteralGloss(translation, literalGloss) && (
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="rounded-lg border border-slate-700/80 bg-slate-900/60 p-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">
+              Translation
+            </p>
+            <p className="mt-1 text-sm text-slate-200">{translation}</p>
+          </div>
+          <div className="rounded-lg border border-slate-700/80 bg-slate-900/60 p-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">
+              Literal Gloss
+            </p>
+            <p className="mt-1 text-sm text-slate-300">{literalGloss}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function UsageExampleCard({
@@ -32,6 +150,12 @@ function UsageExampleCard({
         <span className="w-2.5 h-2.5 rounded-full bg-purple-400/80 shadow-[0_0_0_4px_rgba(192,132,252,0.15)]" />
         {example.label}
       </div>
+      <TranslationMetadata
+        translation={example.translation}
+        literalGloss={example.literalGloss}
+        translationSource={example.translationSource}
+        confidence={example.confidence}
+      />
       <CharacterBreakdown
         segments={example.breakdown}
         pinyin={example.pinyin}
@@ -260,6 +384,12 @@ export default function Flashcard({ card, onRate, onTTS }: FlashcardProps) {
                   <span className="w-2.5 h-2.5 rounded-full bg-purple-400 shadow-[0_0_0_3px_rgba(192,132,252,0.2)]" />
                   Example
                 </div>
+                <TranslationMetadata
+                  translation={card.exampleBreakdown.translation}
+                  literalGloss={card.exampleBreakdown.literalGloss}
+                  translationSource={card.exampleBreakdown.translationSource}
+                  confidence={card.exampleBreakdown.confidence}
+                />
                 <CharacterBreakdown
                   segments={card.exampleBreakdown.segments}
                   pinyin={card.exampleBreakdown.pinyin}
