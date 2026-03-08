@@ -681,9 +681,13 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
     expectedSource: "rule",
     expectedTranslationIncludes: [
       "originally wanted to go",
-      "later i did not go",
+      "later i did not end up going",
     ],
-    expectedTranslationExcludes: ["afterwards drowned", "original to think"],
+    expectedTranslationExcludes: [
+      "afterwards drowned",
+      "original to think",
+      "later i did not go.",
+    ],
   },
   {
     sentence: "我叫小李。",
@@ -700,8 +704,13 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
   {
     sentence: "我以前看过这部电影。",
     expectedSource: "rule",
-    expectedTranslationIncludes: ["have watched this movie before"],
-    expectedTranslationExcludes: ["look after", "ministry movie", "am before"],
+    expectedTranslationIncludes: ["have seen this movie before"],
+    expectedTranslationExcludes: [
+      "have watched this movie",
+      "look after",
+      "ministry movie",
+      "am before",
+    ],
   },
   {
     sentence: "这是他昨天拍的照片。",
@@ -788,11 +797,7 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
     expectedTranslationIncludes: [
       "this dish looks spicy, but it is not as spicy as i imagined",
     ],
-    expectedTranslationExcludes: [
-      "road dish",
-      "to stand up",
-      "like that hot",
-    ],
+    expectedTranslationExcludes: ["road dish", "to stand up", "like that hot"],
   },
   {
     sentence: "如果你先把这篇文章看一遍，再做练习，应该会容易一点。",
@@ -819,7 +824,8 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
     ],
   },
   {
-    sentence: "我本来打算今天把报告写完，但是临时出了几个问题，所以只能明天再继续。",
+    sentence:
+      "我本来打算今天把报告写完，但是临时出了几个问题，所以只能明天再继续。",
     expectedSource: "rule",
     expectedTranslationIncludes: [
       "i originally planned to finish writing the report today, but a few problems came up at the last minute, so i can only continue tomorrow",
@@ -854,10 +860,69 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
     expectedTranslationIncludes: [
       "i have been to that store a few times before, but i have not been there in a long time",
     ],
+    expectedTranslationExcludes: ["that inn", "time drowned", "to go before"],
+  },
+  {
+    sentence: "如果你早就知道这件事，为什么一直没有告诉我",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "if you knew about this long ago",
+      "why did you never tell me",
+    ],
     expectedTranslationExcludes: [
-      "that inn",
-      "time drowned",
-      "to go before",
+      "already at an earlier time",
+      "press charges",
+      "straight do not have to",
+    ],
+  },
+  {
+    sentence: "本来天气预报说下午会下大雨，结果直到晚上都没有下",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "the weather forecast originally said it would rain heavily in the afternoon",
+      "it did not rain even by evening",
+    ],
+    expectedTranslationExcludes: [
+      "to bear fruit",
+      "all haven't",
+      "down heavy rain",
+    ],
+  },
+  {
+    sentence: "我还没决定要不要参加那个活动",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "still have not decided whether to take part in that event",
+    ],
+    expectedTranslationExcludes: [
+      "participate that one to exercise",
+      "want or not",
+      "that one to exercise",
+    ],
+  },
+  {
+    sentence: "如果你不想去，就直接告诉我",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "if you do not want to go, just tell me directly",
+    ],
+    expectedTranslationExcludes: [
+      "direct tell me",
+      "press charges",
+      "if you do not want to go, you directly tell me",
+    ],
+  },
+  {
+    sentence: "如果不是因为今天突然下大雨，我们本来已经到那边了",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "if it had not suddenly rained heavily today",
+      "we would already have gotten there",
+    ],
+    expectedTranslationExcludes: [
+      "if / fault / because",
+      "down / heavy rain",
+      "to / over there / to finish",
     ],
   },
 ];

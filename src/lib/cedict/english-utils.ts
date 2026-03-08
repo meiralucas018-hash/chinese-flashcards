@@ -341,6 +341,46 @@ export function sentenceWithoutPunctuation(text: string): string {
   return text.replace(/[.?!]+$/, "").trim();
 }
 
+export function appendClauseEnding(clause: string, ending: string): string {
+  const baseClause = sentenceWithoutPunctuation(clause);
+  const normalizedEnding = ending.trim();
+  if (!baseClause || !normalizedEnding) {
+    return baseClause;
+  }
+
+  const escapedEnding = normalizedEnding.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escapedEnding}\\b`, "i").test(baseClause)
+    ? baseClause
+    : `${baseClause} ${normalizedEnding}`.trim();
+}
+
+export function buildHaveNotInLongTimeClause(
+  subject: string,
+  completedPredicate: string,
+): string {
+  return `${subject} ${haveForm(subject)} not ${completedPredicate.trim()} in a long time`.trim();
+}
+
+export function buildDidNotEndUpClause(
+  subject: string,
+  verbPhrase: string,
+): string {
+  return `${subject} did not end up ${toGerund(verbPhrase)}`.trim();
+}
+
+export function buildDidNotEvenByClause(
+  subject: string,
+  verbPhrase: string,
+  timePhrase: string,
+): string {
+  const baseClause = `${subject} did not ${verbPhrase}`.trim();
+  const normalizedTimePhrase = timePhrase.trim();
+
+  return normalizedTimePhrase
+    ? `${baseClause} even by ${normalizedTimePhrase}`
+    : baseClause;
+}
+
 export function normalizeProgressiveEnglish(verbPhrase: string): string {
   const normalized = verbPhrase.trim();
   if (!normalized) {
