@@ -545,6 +545,24 @@ export const DYNAMIC_PASSIVE_PARTICIPLES = new Set([
 
 export const PROGRESSIVE_MARKERS = new Set(["在", "正在"]);
 
+export const LEXICALIZED_EXPRESSION_TRANSLATIONS: Record<string, string> = {
+  "你好": "Hello.",
+  "您好": "Hello.",
+  "你好吗": "How are you?",
+  "您好吗": "How are you?",
+  "你怎么样": "How are you?",
+  "您怎么样": "How are you?",
+  "最近怎么样": "How have you been lately?",
+  "早上好": "Good morning.",
+  "晚上好": "Good evening.",
+  "晚安": "Good night.",
+  "谢谢": "Thank you.",
+  "不客气": "You're welcome.",
+  "对不起": "I'm sorry.",
+  "没关系": "It's okay.",
+  "再见": "Goodbye.",
+};
+
 export const NEGATIVE_IMPERATIVE_MARKERS = new Set(["不要", "别"]);
 
 export const IMPERATIVE_POLITENESS_MARKERS = new Set(["请"]);

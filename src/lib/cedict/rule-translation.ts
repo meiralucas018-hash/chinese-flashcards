@@ -7,6 +7,7 @@ import {
   DYNAMIC_PASSIVE_PARTICIPLES,
   IMPERATIVE_ADVERB_WORDS,
   IMPERATIVE_POLITENESS_MARKERS,
+  LEXICALIZED_EXPRESSION_TRANSLATIONS,
   LOCATION_QUESTION_WORDS,
   MEASURE_WORDS,
   MODAL_TRANSLATIONS,
@@ -145,6 +146,11 @@ type ImperativeStructure = {
   politenessMarker: boolean;
   leadingAdverbWords: string[];
   actionTokens: RuleToken[];
+};
+
+type LexicalizedExpressionMatch = {
+  key: string;
+  translation: string;
 };
 
 const ACTION_HINTS: Record<string, ActionHint> = {
@@ -425,6 +431,37 @@ function translateCopularPredicate(tokens: RuleToken[]): string {
     predicatePossessive: true,
     asObject: false,
   });
+}
+
+function normalizeLexicalizedExpressionKey(tokens: RuleToken[]): string {
+  return tokens
+    .filter((token) => !isPunctuationToken(token.word))
+    .map((token) => token.word)
+    .join("")
+    .trim();
+}
+
+function detectLexicalizedExpression(
+  tokens: RuleToken[],
+): LexicalizedExpressionMatch | null {
+  const key = normalizeLexicalizedExpressionKey(tokens);
+  if (!key) {
+    return null;
+  }
+
+  const translation = LEXICALIZED_EXPRESSION_TRANSLATIONS[key];
+  return translation ? { key, translation } : null;
+}
+
+function getLexicalizedTranslation(wordSegments: WordSegment[]): string | null {
+  const match = detectLexicalizedExpression(
+    wordSegments.map<RuleToken>((segment) => ({
+      word: segment.word,
+      meaning: segment.meaning,
+    })),
+  );
+
+  return match?.translation || null;
 }
 
 type ANotAPattern =
@@ -3022,6 +3059,11 @@ export function isAcceptableRuleTranslation(
 export function buildRuleBasedTranslation(
   wordSegments: WordSegment[],
 ): string | null {
+  const lexicalizedTranslation = getLexicalizedTranslation(wordSegments);
+  if (lexicalizedTranslation) {
+    return lexicalizedTranslation;
+  }
+
   const context = buildContext(wordSegments);
   if (!context) {
     return null;
@@ -3067,6 +3109,15 @@ export function buildNaturalTranslation(
   wordSegments: WordSegment[],
   literalGloss: string,
 ): Omit<TranslationResult, "literalGloss"> {
+  const lexicalizedTranslation = getLexicalizedTranslation(wordSegments);
+  if (lexicalizedTranslation) {
+    return {
+      translation: lexicalizedTranslation,
+      translationSource: "rule",
+      confidence: 0.96,
+    };
+  }
+
   const ruleBasedTranslation = buildRuleBasedTranslation(wordSegments);
   const ruleScore = ruleBasedTranslation
     ? scoreRuleTranslation(ruleBasedTranslation, literalGloss)
