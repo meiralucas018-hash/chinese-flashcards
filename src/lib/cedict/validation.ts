@@ -722,7 +722,11 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
       "if this store is on sale today",
       "i will buy a few more items",
     ],
-    expectedTranslationExcludes: ["home inn", "small table", "to give a discount"],
+    expectedTranslationExcludes: [
+      "home inn",
+      "small table",
+      "to give a discount",
+    ],
   },
   {
     sentence: "这是第一次有人把我的名字念对，所以我有一点惊讶。",
@@ -741,6 +745,120 @@ export const CEDICT_VALIDATION_CASES: CedictValidationCase[] = [
       "can you help me take a look at this document",
     ],
     expectedTranslationExcludes: ["can or not", "look after", "between"],
+  },
+  {
+    sentence: "我起床以后先刷牙，再洗脸。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "after getting up, i first brush my teeth and then wash my face",
+    ],
+    expectedTranslationExcludes: [
+      "get out of bed after",
+      "brush one's teeth",
+      "wash your face",
+    ],
+  },
+  {
+    sentence: "我每天早上洗完澡就去上班。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "every morning, i go to work after taking a shower",
+    ],
+    expectedTranslationExcludes: [
+      "wash to finish bath",
+      "at once to go",
+      "go to go to work",
+    ],
+  },
+  {
+    sentence: "我昨天本来要做饭，可是最后还是跟朋友一起出去吃了。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "i originally planned to cook yesterday, but in the end i still went out to eat with a friend",
+    ],
+    expectedTranslationExcludes: [
+      "final or heel",
+      "friend together",
+      "to go out to eat",
+    ],
+  },
+  {
+    sentence: "这道菜看起来很辣，可是吃起来没有我想象的那么辣。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "this dish looks spicy, but it is not as spicy as i imagined",
+    ],
+    expectedTranslationExcludes: [
+      "road dish",
+      "to stand up",
+      "like that hot",
+    ],
+  },
+  {
+    sentence: "如果你先把这篇文章看一遍，再做练习，应该会容易一点。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "if you first read through this article once and then do the exercises, it should be a little easier",
+    ],
+    expectedTranslationExcludes: [
+      "sheet article",
+      "one time",
+      "do to practice",
+    ],
+  },
+  {
+    sentence: "我明天上午九点要开会。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "i have a meeting tomorrow at nine in the morning",
+    ],
+    expectedTranslationExcludes: [
+      "nine point",
+      "to demand",
+      "to hold a meeting",
+    ],
+  },
+  {
+    sentence: "我本来打算今天把报告写完，但是临时出了几个问题，所以只能明天再继续。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "i originally planned to finish writing the report today, but a few problems came up at the last minute, so i can only continue tomorrow",
+    ],
+    expectedTranslationExcludes: [
+      "to plan today to hold",
+      "to inform to finish writing",
+      "then to continue",
+    ],
+  },
+  {
+    sentence: "我姐姐已经结婚了。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: ["my older sister is married"],
+    expectedTranslationExcludes: ["i am older sister", "to marry"],
+  },
+  {
+    sentence: "虽然我哥哥住得很远，但是我们经常打电话。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "although my older brother lives far away, we often talk on the phone",
+    ],
+    expectedTranslationExcludes: [
+      "i am older brother",
+      "live very very far",
+      "call.",
+    ],
+  },
+  {
+    sentence: "我以前本来去过那家店几次，可是最近已经很久没去了。",
+    expectedSource: "rule",
+    expectedTranslationIncludes: [
+      "i have been to that store a few times before, but i have not been there in a long time",
+    ],
+    expectedTranslationExcludes: [
+      "that inn",
+      "time drowned",
+      "to go before",
+    ],
   },
 ];
 

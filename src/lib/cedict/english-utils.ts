@@ -66,6 +66,38 @@ export function conjugateVerb(subject: string, verb: string): string {
   return `${verb}s`;
 }
 
+export function conjugatePredicatePhrase(
+  subject: string,
+  predicatePhrase: string,
+): string {
+  const trimmed = predicatePhrase.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  const [firstWord, ...rest] = trimmed.split(/\s+/);
+  const lowerFirstWord = firstWord.toLowerCase();
+
+  if (lowerFirstWord === "be") {
+    return [beForm(subject), ...rest].join(" ").trim();
+  }
+
+  if (
+    lowerFirstWord === "can" ||
+    lowerFirstWord === "will" ||
+    lowerFirstWord === "would" ||
+    lowerFirstWord === "should" ||
+    lowerFirstWord === "could" ||
+    lowerFirstWord === "may" ||
+    lowerFirstWord === "might" ||
+    lowerFirstWord === "must"
+  ) {
+    return trimmed;
+  }
+
+  return [conjugateVerb(subject, firstWord), ...rest].join(" ").trim();
+}
+
 export function capitalizeSentence(value: string): string {
   if (!value) {
     return value;
@@ -598,7 +630,9 @@ function normalizeLiteralGlossLeakage(value: string): string {
     .replace(/\s+/g, " ")
     .trim();
 
-  return sawSlashGloss ? result.replace(/\b(am)\s+the first time\b/gi, "is the first time") : result;
+  return sawSlashGloss
+    ? result.replace(/\b(am)\s+the first time\b/gi, "is the first time")
+    : result;
 }
 
 function normalizeQuestionCleanup(value: string): string {
