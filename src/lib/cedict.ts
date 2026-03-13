@@ -1,2 +1,2 @@
-// Re-export public CEDICT and sentence translation APIs.
+// Re-export public CEDICT lookup and segmentation APIs.
 export * from "./cedict/index";

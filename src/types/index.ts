@@ -1,65 +1,22 @@
-// Chinese Flash Card Application Types
+import type {
+  FlashcardCompatibleData,
+  GrammarItem,
+  TokenItem,
+} from "@/lib/ai/types";
 
-export interface CardChar {
-  char: string;
-  pinyin: string;
-  meaning: string;
-}
-
-export interface Segment {
-  chars: CardChar[];
-  combinedMeaning: string;
-  isWord: boolean;
-  text?: string;
-  pinyin?: string;
-  startIndex?: number;
-  endIndex?: number;
-}
-
-export interface ExampleBreakdown {
+export interface CardExample {
+  exampleIndex: number;
+  pairText: string;
   sentence: string;
   pinyin: string;
   translation: string;
-  literalGloss?: string;
-  translationSource: "exact" | "rule" | "fallback";
-  confidence?: number;
-  segments: Segment[];
+  tokens: TokenItem[];
+  grammar: GrammarItem[];
 }
 
-export interface SentenceAnalysis {
-  sentence: string;
-  translation: string;
-  literalGloss?: string;
-  translationSource: "exact" | "rule" | "fallback";
-  confidence?: number;
-  pinyin: string;
-  segments: Segment[];
-  characters: CardChar[];
-}
-
-// Usage example with label (like "1. Correct / Right", "2. Verb: To face")
-export interface UsageExample {
-  label: string; // e.g., "1. Correct / Right"
-  sentence: string; // Chinese sentence
-  pinyin: string; // Pinyin with tone marks
-  translation: string; // English translation
-  literalGloss?: string;
-  translationSource?: "exact" | "rule" | "fallback";
-  confidence?: number;
-  breakdown: Segment[]; // Character breakdown
-}
-
-export interface Card {
+export interface Card extends FlashcardCompatibleData {
   id: string;
   deckId: string;
-  front: string;
-  pinyin: string;
-  meaning: string;
-  example: string;
-  exampleBreakdown: ExampleBreakdown;
-  // Multiple usage examples (like the comprehensive breakdown in Example.html)
-  usageExamples?: UsageExample[];
-  // SRS fields
   interval: number;
   repetition: number;
   easeFactor: number;
@@ -86,17 +43,65 @@ export interface SRSResult {
 
 export type Rating = "again" | "hard" | "good" | "easy";
 
-export interface SearchCharResult {
-  char: string;
-  pinyin: string;
-  meaning: string;
+export type QuizSkillType = "meaning" | "pinyin" | "audio" | "writing";
+
+export type QuizAssessmentResult =
+  | "missed"
+  | "recalled_slowly"
+  | "recalled_cleanly"
+  | "approximate"
+  | "correct";
+
+export interface QuizPerformanceEvent {
+  id: string;
+  cardId: string;
+  deckId: string;
+  skillType: QuizSkillType;
+  cycleId: string;
+  cycleScore: number;
+  cyclePassed: boolean;
+  studyLoopCount: number;
+  axisScore: number;
+  timestamp: number;
+  revealed: boolean;
+  assessment: QuizAssessmentResult;
+  isCorrect: boolean;
+  isCleanRecall: boolean;
+  revealCount: number;
+  audioReplayCount: number;
 }
 
-export interface SearchWordResult {
-  word: string;
-  pinyin: string;
-  meaning: string;
-  breakdown: CardChar[];
+export interface QuizPerformanceInput {
+  cardId: string;
+  deckId: string;
+  skillType: QuizSkillType;
+  cycleId: string;
+  cycleScore: number;
+  cyclePassed: boolean;
+  studyLoopCount: number;
+  axisScore: number;
+  revealed: boolean;
+  assessment: QuizAssessmentResult;
+  isCorrect: boolean;
+  isCleanRecall: boolean;
+  revealCount: number;
+  audioReplayCount: number;
+}
+
+export interface ReviewPerformanceEvent {
+  id: string;
+  cardId: string;
+  deckId: string;
+  rating: Rating;
+  timestamp: number;
+  isSuccess: boolean;
+}
+
+export interface ReviewPerformanceInput {
+  cardId: string;
+  deckId: string;
+  rating: Rating;
+  isSuccess: boolean;
 }
 
 export interface FlashCardState {
@@ -109,4 +114,4 @@ export interface FlashCardState {
   isLoading: boolean;
 }
 
-export type TabType = "decks" | "study" | "add" | "search" | "settings";
+export type TabType = "decks" | "statistics" | "add" | "settings";

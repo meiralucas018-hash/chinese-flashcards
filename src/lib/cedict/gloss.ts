@@ -1,23 +1,4 @@
-import type { CardChar, Segment } from "@/types";
-import {
-  ADVERB_TRANSLATIONS,
-  ADJECTIVE_TRANSLATIONS,
-  MEASURE_WORDS,
-  OBJECT_TRANSLATIONS,
-  POSSESSIVE_TRANSLATIONS,
-  SKIPPABLE_TOKENS,
-  SUBJECT_TRANSLATIONS,
-  TIME_TRANSLATIONS,
-  VERB_TRANSLATIONS,
-} from "./constants";
-import { isPunctuationToken } from "./english-utils";
-import type {
-  CedictEntry,
-  CedictIndex,
-  CharacterInfo,
-  RuleToken,
-  WordSegment,
-} from "./types";
+import type { CedictEntry, CedictIndex, CharacterInfo } from "./types";
 
 export function uniqueBy<T>(items: T[], keyFn: (item: T) => string): T[] {
   const seen = new Set<string>();
@@ -43,9 +24,16 @@ export function sanitizeMeaning(meaning: string): string {
     .trim();
 }
 
-export function pickPrimaryMeaning(meaning: string): string {
-  return sanitizeMeaning(meaning).split(/;\s*/)[0]?.trim() || "";
-}
+const PREFERRED_ENTRY_MEANING_PATTERNS: Record<string, RegExp> = {
+  本: /\bclassifier\b|\bmeasure word\b/i,
+  比: /\bthan\b|\bcompare\b|\bcomparison\b/i,
+  更: /\bmore\b|\beven more\b/i,
+  才: /\bonly\b|\bjust\b|\bnot until\b/i,
+  还是: /\bstill\b|\byet\b|\bnevertheless\b/i,
+  请: /\bplease\b/i,
+  说: /\bto speak\b|\bto say\b|\bspeak\b|\bsay\b/i,
+  累: /\btired\b/i,
+};
 
 function scoreMeaningText(meaning: string): number {
   const text = sanitizeMeaning(meaning).toLowerCase();
@@ -96,6 +84,13 @@ function scoreEntry(entry: CedictEntry): number {
     score += 1;
   }
 
+  const preferredPattern =
+    PREFERRED_ENTRY_MEANING_PATTERNS[entry.simplified] ||
+    PREFERRED_ENTRY_MEANING_PATTERNS[entry.traditional];
+  if (preferredPattern?.test(allMeanings)) {
+    score += 18;
+  }
+
   return score;
 }
 
@@ -120,132 +115,4 @@ export function toCharacterInfo(
     pinyin: entry.pinyin,
     meaning: sanitizeMeaning(entry.meanings.join("; ")),
   };
-}
-
-export function pickLexicalMeaning(token: RuleToken): string {
-  return (
-    ADJECTIVE_TRANSLATIONS[token.word] || pickPrimaryMeaning(token.meaning)
-  );
-}
-
-export function translateTokenMeaning(
-  token: RuleToken,
-  asObject = false,
-): string {
-  if (asObject && OBJECT_TRANSLATIONS[token.word]) {
-    return OBJECT_TRANSLATIONS[token.word];
-  }
-  if (!asObject && SUBJECT_TRANSLATIONS[token.word]) {
-    return SUBJECT_TRANSLATIONS[token.word];
-  }
-  if (TIME_TRANSLATIONS[token.word]) {
-    return TIME_TRANSLATIONS[token.word];
-  }
-  if (ADJECTIVE_TRANSLATIONS[token.word]) {
-    return ADJECTIVE_TRANSLATIONS[token.word];
-  }
-  if (MEASURE_WORDS.has(token.word)) {
-    return "";
-  }
-
-  return pickLexicalMeaning(token);
-}
-
-export function translatePhrase(tokens: RuleToken[], asObject = false): string {
-  const parts: string[] = [];
-
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index];
-    const nextToken = tokens[index + 1];
-
-    if (SKIPPABLE_TOKENS.has(token.word) || isPunctuationToken(token.word)) {
-      continue;
-    }
-
-    if (nextToken?.word === "的" && POSSESSIVE_TRANSLATIONS[token.word]) {
-      parts.push(POSSESSIVE_TRANSLATIONS[token.word]);
-      index += 1;
-      continue;
-    }
-
-    if (ADVERB_TRANSLATIONS[token.word]) {
-      parts.push(ADVERB_TRANSLATIONS[token.word]);
-      continue;
-    }
-
-    const translated = translateTokenMeaning(token, asObject);
-    if (translated) {
-      parts.push(translated);
-    }
-  }
-
-  return parts.join(" ").replace(/\s+/g, " ").trim();
-}
-
-export function buildLiteralGloss(wordSegments: WordSegment[]): string {
-  const mappedTokens = wordSegments
-    .map((segment) => {
-      const word = segment.word.trim();
-      if (!word || isPunctuationToken(word) || MEASURE_WORDS.has(word)) {
-        return "";
-      }
-
-      if (word === "是") return "am";
-      if (word === "有") return "have";
-      if (word === "很") return "very";
-      if (word === "中文" || word === "汉语" || word === "汉文") {
-        return "Chinese";
-      }
-      if (word === "一" || word === "一个") return "one";
-      if (TIME_TRANSLATIONS[word]) return TIME_TRANSLATIONS[word];
-      if (SUBJECT_TRANSLATIONS[word]) return SUBJECT_TRANSLATIONS[word];
-      if (VERB_TRANSLATIONS[word]) return VERB_TRANSLATIONS[word];
-
-      const lexical = pickPrimaryMeaning(segment.meaning)
-        .replace(/\(.*?\)/g, "")
-        .replace(/\bclassifier\b.*$/i, "")
-        .replace(/\badverb of degree\b/gi, "")
-        .replace(/\s+or\s+(him|her|them|us|me)\b/gi, "")
-        .replace(/\blanguage\b/gi, "")
-        .replace(/\s+/g, " ")
-        .trim();
-
-      return lexical || word;
-    })
-    .filter(Boolean);
-
-  const parts: string[] = [];
-  for (let index = 0; index < mappedTokens.length; index += 1) {
-    const current = mappedTokens[index];
-    const next = mappedTokens[index + 1];
-    if (
-      /^(this|that|these|those)$/i.test(current) &&
-      next &&
-      !/^(very|am|have)$/i.test(next)
-    ) {
-      parts.push(`${current} ${next}`);
-      index += 1;
-      continue;
-    }
-
-    parts.push(current);
-  }
-
-  return parts.join(" / ");
-}
-
-export function toBreakdownSegments(wordSegments: WordSegment[]): Segment[] {
-  return wordSegments.map((segment) => ({
-    chars: segment.chars.map<CardChar>((charInfo) => ({
-      char: charInfo.char,
-      pinyin: charInfo.pinyin,
-      meaning: charInfo.meaning,
-    })),
-    combinedMeaning: sanitizeMeaning(segment.meaning),
-    isWord: segment.word.length > 1,
-    text: segment.word,
-    pinyin: segment.pinyin,
-    startIndex: segment.startIndex,
-    endIndex: segment.endIndex,
-  }));
 }

@@ -54,82 +54,134 @@ export default function DecksView({
   const [newDeckName, setNewDeckName] = useState("");
   const [newDeckDescription, setNewDeckDescription] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const totalCards = decks.reduce(
+    (sum, deck) => sum + (deckStatsMap[deck.id]?.total || 0),
+    0,
+  );
+  const totalDue = decks.reduce(
+    (sum, deck) => sum + (deckStatsMap[deck.id]?.due || 0),
+    0,
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-4 text-center">
-        <h2 className="text-xl font-semibold text-slate-100">Your Decks</h2>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button
-              size="sm"
-              className="border border-blue-500/40 bg-blue-500/20 text-slate-100 hover:bg-blue-500/30"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              New Deck
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-slate-900 border-slate-700">
-            <DialogHeader>
-              <DialogTitle>Create New Deck</DialogTitle>
-              <DialogDescription>
-                Create a new deck to organize your flashcards.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="deckName">Deck Name</Label>
-                <Input
-                  id="deckName"
-                  value={newDeckName}
-                  onChange={(event) => setNewDeckName(event.target.value)}
-                  placeholder="e.g., HSK 1 Vocabulary"
-                  className="bg-slate-800 border-slate-600"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="deckDesc">Description (optional)</Label>
-                <Input
-                  id="deckDesc"
-                  value={newDeckDescription}
-                  onChange={(event) =>
-                    setNewDeckDescription(event.target.value)
-                  }
-                  placeholder="e.g., Basic HSK level 1 words"
-                  className="bg-slate-800 border-slate-600"
-                />
-              </div>
+    <div className="space-y-5">
+      <div className="app-panel mx-auto w-full max-w-5xl rounded-[30px] p-4 sm:p-5">
+        <div className="app-surface rounded-[22px] p-4 sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-2.5">
+              <p className="text-[11px] uppercase tracking-[0.24em] text-cyan-200/80">
+                Deck Library
+              </p>
+              <h2 className="text-3xl font-semibold tracking-tight text-slate-50 sm:text-[2rem]">
+                Your Decks
+              </h2>
+              <p className="max-w-2xl text-sm leading-6 text-slate-300 sm:text-[15px]">
+                Organize study sets, monitor due cards, and continue review
+                from a single calm command center.
+              </p>
             </div>
-            <DialogFooter>
-              <Button
-                onClick={async () => {
-                  const created = await onCreateDeck(
-                    newDeckName,
-                    newDeckDescription,
-                  );
-                  if (created) {
-                    setNewDeckName("");
-                    setNewDeckDescription("");
-                    setIsCreateOpen(false);
-                  }
-                }}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Badge
+                variant="outline"
+                className="app-chip px-3.5 py-1.5 text-[11px] uppercase tracking-[0.18em]"
               >
-                Create Deck
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                {decks.length} {decks.length === 1 ? "Deck" : "Decks"}
+              </Badge>
+              <Badge
+                variant="outline"
+                className="app-chip-warm px-3.5 py-1.5 text-[11px] uppercase tracking-[0.18em]"
+              >
+                {totalDue} due
+              </Badge>
+              <Badge
+                variant="outline"
+                className="app-chip-neon px-3.5 py-1.5 text-[11px] uppercase tracking-[0.18em]"
+              >
+                {totalCards} cards
+              </Badge>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="app-action-neon h-10 px-5">
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Deck
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="app-panel rounded-[28px] text-slate-100">
+                <DialogHeader>
+                  <DialogTitle className="text-slate-50">
+                    Create New Deck
+                  </DialogTitle>
+                  <DialogDescription className="text-slate-400">
+                    Create a new deck to organize your flashcards.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="deckName" className="text-slate-200">
+                      Deck Name
+                    </Label>
+                    <Input
+                      id="deckName"
+                      value={newDeckName}
+                      onChange={(event) => setNewDeckName(event.target.value)}
+                      placeholder="e.g., HSK 1 Vocabulary"
+                      className="app-field"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="deckDesc" className="text-slate-200">
+                      Description (optional)
+                    </Label>
+                    <Input
+                      id="deckDesc"
+                      value={newDeckDescription}
+                      onChange={(event) =>
+                        setNewDeckDescription(event.target.value)
+                      }
+                      placeholder="e.g., Basic HSK level 1 words"
+                      className="app-field"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    className="app-action-neon"
+                    onClick={async () => {
+                      const created = await onCreateDeck(
+                        newDeckName,
+                        newDeckDescription,
+                      );
+                      if (created) {
+                        setNewDeckName("");
+                        setNewDeckDescription("");
+                        setIsCreateOpen(false);
+                      }
+                    }}
+                  >
+                    Create Deck
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
       </div>
 
       {decks.length === 0 ? (
-        <Card className="mx-auto max-w-3xl bg-slate-800/30 border-slate-700">
+        <Card className="app-panel-soft mx-auto max-w-3xl rounded-[28px]">
           <CardContent className="py-12 text-center text-slate-400">
-            <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>No decks yet. Create your first deck to get started.</p>
+            <BookOpen className="mx-auto mb-4 h-12 w-12 text-cyan-200/70" />
+            <p className="text-base text-slate-200">
+              No decks yet. Create your first deck to get started.
+            </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="mx-auto flex max-w-5xl flex-wrap justify-center gap-4">
+        <div className="mx-auto grid w-full max-w-5xl gap-4 sm:grid-cols-2">
           {decks.map((deck) => {
             const stats = deckStatsMap[deck.id] || {
               total: 0,
@@ -140,15 +192,15 @@ export default function DecksView({
             return (
               <Card
                 key={deck.id}
-                className="w-full max-w-[392px] bg-gradient-to-b from-white/5 to-transparent border-slate-700 hover:border-blue-500/50 transition-colors"
+                className="app-panel-soft group w-full rounded-[30px] border-white/10 transition-all duration-300 hover:-translate-y-0.5 hover:border-cyan-300/22 hover:shadow-[0_18px_54px_rgba(4,12,20,0.48)]"
               >
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="text-slate-100">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1.5">
+                      <CardTitle className="text-2xl tracking-tight text-slate-100">
                         {deck.name}
                       </CardTitle>
-                      <CardDescription className="text-slate-400">
+                      <CardDescription className="text-sm leading-6 text-slate-400">
                         {deck.description || "No description"}
                       </CardDescription>
                     </div>
@@ -157,24 +209,28 @@ export default function DecksView({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="text-red-400 hover:bg-red-500/20"
+                          className="text-rose-300 hover:bg-rose-400/10"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </AlertDialogTrigger>
-                      <AlertDialogContent className="bg-slate-900 border-slate-700">
+                      <AlertDialogContent className="app-panel rounded-[24px] text-slate-100">
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Deck?</AlertDialogTitle>
-                          <AlertDialogDescription>
+                          <AlertDialogTitle className="text-slate-50">
+                            Delete Deck?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription className="text-slate-400">
                             This permanently deletes {deck.name} and all of its
                             cards.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogCancel className="app-action">
+                            Cancel
+                          </AlertDialogCancel>
                           <AlertDialogAction
                             onClick={async () => onDeleteDeck(deck.id)}
-                            className="bg-red-500 hover:bg-red-600"
+                            className="app-action-danger"
                           >
                             Delete
                           </AlertDialogAction>
@@ -184,26 +240,20 @@ export default function DecksView({
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
+                  <div className="app-surface space-y-4 rounded-2xl p-4">
                     <div className="flex gap-2">
-                      <Badge
-                        variant="outline"
-                        className="text-blue-400 border-blue-400/50"
-                      >
+                      <Badge variant="outline" className="app-chip-neon">
                         {stats.total} cards
                       </Badge>
                       {stats.due > 0 && (
-                        <Badge
-                          variant="outline"
-                          className="text-yellow-400 border-yellow-400/50"
-                        >
+                        <Badge variant="outline" className="app-chip-warm">
                           {stats.due} due
                         </Badge>
                       )}
                     </div>
                     {stats.total > 0 && (
-                      <div>
-                        <div className="flex justify-between text-xs text-slate-400 mb-1">
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-[11px] uppercase tracking-[0.16em] text-slate-500">
                           <span>Progress</span>
                           <span>
                             {Math.round((stats.learned / stats.total) * 100)}%
@@ -211,27 +261,27 @@ export default function DecksView({
                         </div>
                         <Progress
                           value={(stats.learned / stats.total) * 100}
-                          className="h-1.5 bg-slate-700"
+                          className="h-1.5 bg-slate-800/90"
                         />
                       </div>
                     )}
-                    <div className="flex gap-2 pt-2">
+                    <div className="grid gap-2 pt-1 sm:grid-cols-2">
                       <Button
                         size="sm"
                         onClick={() => onStudyDeck(deck.id)}
                         disabled={stats.due === 0}
-                        className="flex-1 bg-green-500/20 border border-green-500/40 hover:bg-green-500/30 text-green-400 disabled:opacity-50"
+                        className="app-action-neon h-10 w-full disabled:opacity-45"
                       >
-                        <GraduationCap className="w-4 h-4 mr-1" />
+                        <GraduationCap className="mr-1 h-4 w-4" />
                         Study ({stats.due})
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => onSelectDeckForCards(deck)}
-                        className="flex-1 border-slate-600 hover:bg-slate-700"
+                        className="app-action h-10 w-full"
                       >
-                        <Plus className="w-4 h-4 mr-1" />
+                        <Plus className="mr-1 h-4 w-4" />
                         Add Cards
                       </Button>
                     </div>

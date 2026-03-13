@@ -33,25 +33,3 @@ export interface WordSegment {
   endIndex: number;
   chars: CharacterInfo[];
 }
-
-export type TranslationSource = "exact" | "rule" | "fallback";
-
-export type RuleToken = {
-  word: string;
-  meaning: string;
-};
-
-export type TranslatedPhrase = {
-  text: string;
-  isVerbPhrase: boolean;
-  isPast: boolean;
-  isExperienced: boolean;
-  isOngoing: boolean;
-};
-
-export type TranslationResult = {
-  translation: string;
-  literalGloss: string;
-  translationSource: TranslationSource;
-  confidence?: number;
-};

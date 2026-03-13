@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import {
   Check,
-  CircleHelp,
+  Copy,
+  Eye,
   FolderOpen,
   Loader2,
-  Pencil,
-  Search,
   Sparkles,
   Trash2,
+  Undo2,
+  Volume2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,960 +28,1003 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { buildExampleBreakdown, loadCedict } from "@/lib/cedict";
+import type { ParsedWordResponse } from "@/lib/ai/types";
+import {
+  autoRepairResponse,
+  generatePrompt,
+  normalizeResponse,
+  parseWordResponse,
+  validateWordResponse,
+} from "@/lib/ai/aiParser";
+import { mapParsedWordResponseToFlashcard } from "@/lib/ai/flashcardAdapter";
 import { convertPinyinTones } from "@/lib/pinyin";
-import type { Card as CardType, Deck, SentenceAnalysis } from "@/types";
-import CharacterBreakdown from "@/components/flashcard/CharacterBreakdown";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import type { SpeakTextOptions } from "@/lib/tts";
+import type { Card as CardType, Deck } from "@/types";
+import Flashcard from "@/components/flashcard/Flashcard";
 
-export interface NewCardFormState {
-  front: string;
-  pinyin: string;
-  meaning: string;
-  example: string;
-  examplePinyin: string;
-  exampleTranslation: string;
+type ParseStatus = "idle" | "parsing" | "success" | "error";
+type AddCardPanel = "builder" | "inventory";
+
+interface AnalyzerState {
+  wordInput: string;
+  parseStatus: ParseStatus;
+  promptCopied: boolean;
+  previewCard: CardType | null;
+  parseMessage: string;
+  parseCopyMessage: string;
+}
+
+type AnalyzerAction =
+  | { type: "set-word"; value: string }
+  | { type: "prompt-copied" }
+  | { type: "prompt-reset" }
+  | { type: "parse-start" }
+  | {
+      type: "parse-result";
+      parseStatus: ParseStatus;
+      previewCard: CardType | null;
+      parseMessage: string;
+      parseCopyMessage: string;
+    }
+  | { type: "clear" };
+
+const INITIAL_STATE: AnalyzerState = {
+  wordInput: "",
+  parseStatus: "idle",
+  promptCopied: false,
+  previewCard: null,
+  parseMessage: "",
+  parseCopyMessage: "",
+};
+
+function normalizeWordKey(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function normalizeForSearch(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[’'`-]/g, "")
+    .replace(/\s+/g, "");
+}
+
+function resetParseState(state: AnalyzerState): AnalyzerState {
+  return {
+    ...state,
+    parseStatus: "idle",
+    previewCard: null,
+    parseMessage: "",
+    parseCopyMessage: "",
+  };
+}
+
+function analyzerReducer(
+  state: AnalyzerState,
+  action: AnalyzerAction,
+): AnalyzerState {
+  switch (action.type) {
+    case "set-word":
+      return resetParseState({
+        ...state,
+        wordInput: action.value,
+        promptCopied: false,
+      });
+    case "prompt-copied":
+      return {
+        ...state,
+        promptCopied: true,
+      };
+    case "prompt-reset":
+      return {
+        ...state,
+        promptCopied: false,
+      };
+    case "parse-start":
+      return {
+        ...state,
+        parseStatus: "parsing",
+        parseMessage: "",
+        parseCopyMessage: "",
+      };
+    case "parse-result":
+      return {
+        ...state,
+        parseStatus: action.parseStatus,
+        previewCard: action.previewCard,
+        parseMessage:
+          action.parseStatus === "error"
+            ? INCOMPATIBLE_AI_RESPONSE_MESSAGE
+            : action.parseMessage,
+        parseCopyMessage: action.parseCopyMessage,
+      };
+    case "clear":
+      return INITIAL_STATE;
+    default:
+      return state;
+  }
 }
 
 interface AddCardViewProps {
   decks: Deck[];
   currentDeck: Deck | null;
+  allCards: CardType[];
   cardsInDeck: CardType[];
-  formState: NewCardFormState;
-  sentenceAnalysis: SentenceAnalysis | null;
-  isAutoFetching: boolean;
-  isAnalyzingSentence: boolean;
   onGoDecks: () => void;
   onSelectDeck: (deckId: string) => void;
-  onFormChange: (patch: Partial<NewCardFormState>) => void;
-  onAutoFetch: () => Promise<void>;
-  onAnalyzeSentence: () => Promise<void>;
-  onCreateCard: () => Promise<void>;
-  onClearForm: () => void;
+  onSaveCard: (previewCard: CardType) => Promise<boolean>;
   onDeleteCard: (cardId: string) => Promise<void>;
-  onEditCard: (cardId: string, patch: EditableCardPatch) => Promise<void>;
+  onSpeakChinese: (text: string, options?: Partial<SpeakTextOptions>) => void;
+  hasDedicatedChineseVoice: boolean;
 }
 
-type EditableCardPatch = Pick<
-  CardType,
-  "front" | "pinyin" | "meaning" | "example"
-> &
-  Partial<Pick<CardType, "exampleBreakdown" | "usageExamples">>;
-
-interface GeneratedWordPreview {
-  front: string;
-  breakdown: CardType["exampleBreakdown"];
-}
-
-interface PendingWordLookup {
-  front: string;
-  pinyin: string;
-  meaning: string;
-}
-
-function WorkflowActionPanel({
-  title,
-  description,
-  action,
-}: {
-  title: string;
-  description: string;
-  action: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-white/8 bg-white/[0.025] p-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="space-y-1">
-        <p className="text-sm font-medium text-slate-200">{title}</p>
-        <p className="text-xs leading-5 text-slate-500">{description}</p>
-      </div>
-      {action}
-    </div>
-  );
-}
-
-function EditableCardRow({
+function DeckCardRow({
   card,
   onDelete,
-  onSave,
+  onViewCard,
 }: {
   card: CardType;
   onDelete: (cardId: string) => Promise<void>;
-  onSave: (cardId: string, patch: EditableCardPatch) => Promise<void>;
+  onViewCard: (card: CardType) => void;
 }) {
-  const [draftFront, setDraftFront] = useState(card.front);
-  const [draftPinyin, setDraftPinyin] = useState(card.pinyin);
-  const [draftMeaning, setDraftMeaning] = useState(card.meaning);
-  const [draftExample, setDraftExample] = useState(card.example);
-
   return (
-    <div className="space-y-3 rounded-xl border border-white/8 bg-slate-900/55 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
-          <div className="font-chinese-ui text-xl font-semibold text-blue-200">
-            {card.front}
-          </div>
-          <div className="text-sm text-slate-300">
-            {convertPinyinTones(card.pinyin)}
-          </div>
-          <div className="text-sm text-slate-400">{card.meaning}</div>
-        </div>
-        <div className="flex gap-2 self-start">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-slate-600/80 bg-white/[0.03] text-slate-200 hover:bg-white/[0.06]"
-              >
-                <Pencil className="mr-1 h-4 w-4" />
-                Edit
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="border-slate-700 bg-slate-900">
-              <DialogHeader>
-                <DialogTitle>Edit Card</DialogTitle>
-                <DialogDescription>
-                  Update the card and save it locally.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3 py-2">
-                <div className="space-y-1">
-                  <Label>Front</Label>
-                  <Input
-                    value={draftFront}
-                    onChange={(event) => setDraftFront(event.target.value)}
-                    className="border-slate-600 bg-slate-800"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Pinyin</Label>
-                  <Input
-                    value={draftPinyin}
-                    onChange={(event) => setDraftPinyin(event.target.value)}
-                    className="border-slate-600 bg-slate-800"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Meaning</Label>
-                  <Input
-                    value={draftMeaning}
-                    onChange={(event) => setDraftMeaning(event.target.value)}
-                    className="border-slate-600 bg-slate-800"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Example</Label>
-                  <Textarea
-                    value={draftExample}
-                    onChange={(event) => setDraftExample(event.target.value)}
-                    className="border-slate-600 bg-slate-800"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  onClick={async () => {
-                    await onSave(card.id, {
-                      front: draftFront.trim(),
-                      pinyin: draftPinyin.trim(),
-                      meaning: draftMeaning.trim(),
-                      example: draftExample.trim(),
-                      exampleBreakdown: card.exampleBreakdown,
-                      usageExamples: card.usageExamples,
-                    });
-                  }}
-                >
-                  Save Changes
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-red-400 hover:bg-red-500/15 hover:text-red-200"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent className="border-slate-700 bg-slate-900">
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Card?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This permanently deletes the card {card.front}.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => void onDelete(card.id)}
-                  className="bg-red-500 hover:bg-red-600"
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
+    <div className="app-surface flex items-start justify-between gap-3 rounded-2xl p-4">
+      <div className="space-y-1">
+        <p className="font-chinese-ui text-xl text-cyan-100">{card.front}</p>
+        <p className="text-sm text-slate-300">
+          {convertPinyinTones(card.pinyin)}
+        </p>
+        <p className="text-sm text-slate-400">{card.meaning}</p>
+        <p className="text-xs text-slate-500">
+          {card.examples.length} example
+          {card.examples.length === 1 ? "" : "s"}
+        </p>
       </div>
-      {card.example.trim() && (
-        <div className="rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 text-sm text-slate-400">
-          Example: {card.example}
-        </div>
-      )}
+      <div className="flex items-center gap-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onViewCard(card)}
+          className="app-action h-8 px-2.5 text-xs"
+        >
+          <Eye className="mr-1.5 h-3.5 w-3.5" />
+          View Card
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => void onDelete(card.id)}
+          className="text-rose-300 hover:bg-rose-400/10 hover:text-rose-100"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }
 
-function getTranslationSourceExplanation(
-  source: "exact" | "rule" | "fallback",
-): string {
-  if (source === "exact") {
-    return "A full sentence match was found in the dictionary, so the English comes directly from that entry.";
-  }
-  if (source === "rule") {
-    return "The app broke the sentence into known words, then rewrote the meaning into more natural English.";
+function toUserFacingError(error: unknown): string {
+  if (error instanceof DOMException && error.name === "NotAllowedError") {
+    return "Clipboard access was blocked. Allow clipboard access, then try parsing again.";
   }
 
-  return "No stronger sentence translation was available, so this stays close to the literal word-by-word gloss.";
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Could not read the clipboard.";
 }
 
-function shouldShowLiteralGloss(
-  translation: string,
-  literalGloss?: string,
-): boolean {
-  const normalizedLiteralGloss = literalGloss?.trim() || "";
-  const normalize = (value: string) =>
-    value
-      .toLowerCase()
-      .replace(/[.?!,;:]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
+const INCOMPATIBLE_AI_RESPONSE_MESSAGE =
+  "An error occurred because the AI generated a response that is incompatible with the parser. Please copy the error message and send it to the AI.";
+const GLOBAL_FIELDS_SCOPE_MESSAGE =
+  "This error happens to all fields. Adjust all of them.";
 
+function resolveParseErrorMessages(message: string): {
+  parseMessage: string;
+  parseCopyMessage: string;
+} {
+  const trimmed = message.trim();
+
+  const missingEndQuestionPattern =
+    /Missing \[END_QUESTION(?:_\d+)?\] block\./i;
+  if (missingEndQuestionPattern.test(trimmed)) {
+    return {
+      parseMessage: INCOMPATIBLE_AI_RESPONSE_MESSAGE,
+      parseCopyMessage:
+        "The parser could not process the response. Please make sure that there are no missing [END_QUESTION] block. This error happens to all fields. Adjust all of them.",
+    };
+  }
+
+  const missingPatternMarker =
+    /Pattern in \[EXAMPLE(?:_\d+)?\] must include the relevant Chinese word or marker from the sentence\./i;
+  if (missingPatternMarker.test(trimmed)) {
+    return {
+      parseMessage: INCOMPATIBLE_AI_RESPONSE_MESSAGE,
+      parseCopyMessage:
+        "The parser could not process the response. Please make sure that all patterns in all [EXAMPLE] include the relevant Chinese word or marker from the sentence. This error happens to all fields. Adjust all of them.",
+    };
+  }
+
+  const missingPairTextInExample =
+    /Pair text does not appear in \[EXAMPLE(?:_\d+)?\] sentence\./i;
+  if (missingPairTextInExample.test(trimmed)) {
+    return {
+      parseMessage: INCOMPATIBLE_AI_RESPONSE_MESSAGE,
+      parseCopyMessage:
+        "The parser could not process the response. Please make sure that the pair text appears in [EXAMPLE]. This error happens to all fields. Adjust all of them.",
+    };
+  }
+
+  return {
+    parseMessage: trimmed,
+    parseCopyMessage: trimmed,
+  };
+}
+
+function createPreviewCard(
+  parsedData: ParsedWordResponse,
+  currentDeckId: string,
+): Promise<CardType> {
+  return mapParsedWordResponseToFlashcard(parsedData).then((flashcardData) => ({
+    ...flashcardData,
+    id: "preview-card",
+    deckId: currentDeckId,
+    interval: 0,
+    repetition: 0,
+    easeFactor: 2.5,
+    nextReview: Date.now(),
+    lastReview: 0,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }));
+}
+
+function isPromptTemplateText(text: string): boolean {
   return (
-    Boolean(normalizedLiteralGloss) &&
-    normalize(translation) !== normalize(normalizedLiteralGloss)
+    /You are generating parser input for a Chinese learning application\./i.test(
+      text,
+    ) && /Now generate the real response for this word:/i.test(text)
   );
+}
+
+function extractClipboardTargetWord(text: string): string {
+  const normalizedText = normalizeResponse(text);
+
+  const beginWordBlockMatch = normalizedText.match(
+    /\[BEGIN_WORD\][\s\S]*?\[END_WORD\]/i,
+  );
+  if (beginWordBlockMatch) {
+    const wordLine = beginWordBlockMatch[0]
+      .split(/\r?\n/)
+      .find((line) => line.trim().toLowerCase().startsWith("word="));
+    const parsedWord = wordLine?.split("=").slice(1).join("=").trim() || "";
+    if (parsedWord) {
+      return parsedWord;
+    }
+  }
+
+  const lines = normalizedText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const bottomPromptIndex = lines.findIndex((line) =>
+    /now generate the real response for this word:/i.test(line),
+  );
+  if (bottomPromptIndex >= 0 && lines[bottomPromptIndex + 1]) {
+    return lines[bottomPromptIndex + 1].trim();
+  }
+
+  return "";
 }
 
 export default function AddCardView({
   decks,
   currentDeck,
+  allCards,
   cardsInDeck,
-  formState,
-  sentenceAnalysis,
-  isAutoFetching,
-  isAnalyzingSentence,
   onGoDecks,
   onSelectDeck,
-  onFormChange,
-  onAutoFetch,
-  onAnalyzeSentence,
-  onCreateCard,
-  onClearForm,
+  onSaveCard,
   onDeleteCard,
-  onEditCard,
+  onSpeakChinese,
+  hasDedicatedChineseVoice,
 }: AddCardViewProps) {
-  const [authoringMode, setAuthoringMode] = useState<"word" | "sentence">(
-    "word",
-  );
-  const [pendingWordLookup, setPendingWordLookup] =
-    useState<PendingWordLookup | null>(null);
-  const [wordLookupPreview, setWordLookupPreview] =
-    useState<GeneratedWordPreview | null>(null);
+  const [state, dispatch] = useReducer(analyzerReducer, INITIAL_STATE);
   const [deckCardSearch, setDeckCardSearch] = useState("");
+  const [activePanel, setActivePanel] = useState<AddCardPanel>("builder");
+  const [viewedInventoryCard, setViewedInventoryCard] = useState<CardType | null>(
+    null,
+  );
+  const [errorCopied, setErrorCopied] = useState(false);
+  const [duplicateParseAlert, setDuplicateParseAlert] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+  }>({ open: false, title: "Duplicate Character", message: "" });
 
-  const analysisPreview = useMemo(() => {
-    if (!sentenceAnalysis) return null;
-    if (!formState.example.trim()) return null;
-    if (sentenceAnalysis.sentence !== formState.example.trim()) return null;
-    return sentenceAnalysis;
-  }, [sentenceAnalysis, formState.example]);
+  useEffect(() => {
+    if (!state.promptCopied) {
+      return;
+    }
 
-  const analyzedPinyin = analysisPreview?.pinyin || formState.examplePinyin;
-  const analyzedTranslation =
-    analysisPreview?.translation || formState.exampleTranslation;
-  const activeWordPreview =
-    wordLookupPreview && wordLookupPreview.front === formState.front.trim()
-      ? wordLookupPreview
-      : null;
-  const sourceChineseInputClass =
-    "min-h-13 border-slate-600/80 bg-slate-900/80 font-chinese-ui text-2xl leading-relaxed text-slate-50 shadow-inner shadow-black/20 focus-visible:border-blue-400/60";
-  const hasWordDraft = formState.front.trim().length > 0;
-  const hasSentenceDraft = formState.example.trim().length > 0;
-  const filteredCardsInDeck = useMemo(() => {
+    const timeoutId = window.setTimeout(() => {
+      dispatch({ type: "prompt-reset" });
+    }, 1800);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [state.promptCopied]);
+
+  useEffect(() => {
+    if (!errorCopied) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setErrorCopied(false);
+    }, 1600);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [errorCopied]);
+
+  const filteredCards = useMemo(() => {
     const query = deckCardSearch.trim().toLowerCase();
     if (!query) {
       return cardsInDeck;
     }
 
-    return cardsInDeck.filter((card) => {
-      const haystacks = [
-        card.front,
-        card.pinyin,
-        convertPinyinTones(card.pinyin),
-        card.meaning,
-        card.example,
-        card.exampleBreakdown?.translation,
-        card.exampleBreakdown?.literalGloss,
-        ...(card.usageExamples?.flatMap((example) => [
-          example.sentence,
-          example.pinyin,
-          convertPinyinTones(example.pinyin),
-          example.translation,
-          example.literalGloss || "",
-        ]) || []),
-      ]
-        .filter((value): value is string => Boolean(value))
-        .map((value) => value.toLowerCase());
+    const normalizedQuery = normalizeForSearch(query);
+    const normalizedQueryWithoutToneDigits = normalizedQuery.replace(/[1-5]/g, "");
 
-      return haystacks.some((value) => value.includes(query));
+    return cardsInDeck.filter((card) => {
+      const characterText = normalizeForSearch(card.front);
+      const meaningText = normalizeForSearch(card.meaning);
+      const pinyinText = normalizeForSearch(card.pinyin.replace(/ü/gi, "u"));
+      const pinyinWithoutToneDigits = pinyinText.replace(/[1-5]/g, "");
+
+      return (
+        characterText.includes(normalizedQuery) ||
+        meaningText.includes(normalizedQuery) ||
+        pinyinText.includes(normalizedQuery) ||
+        pinyinWithoutToneDigits.includes(normalizedQuery) ||
+        pinyinWithoutToneDigits.includes(normalizedQueryWithoutToneDigits)
+      );
     });
   }, [cardsInDeck, deckCardSearch]);
 
-  useEffect(() => {
-    if (!pendingWordLookup || isAutoFetching) {
-      return;
+  const existingDeckWordKeys = useMemo(
+    () => new Set(cardsInDeck.map((card) => normalizeWordKey(card.front))),
+    [cardsInDeck],
+  );
+  const existingGlobalWordKeys = useMemo(
+    () => new Set(allCards.map((card) => normalizeWordKey(card.front))),
+    [allCards],
+  );
+  const normalizedInputWordKey = useMemo(
+    () => normalizeWordKey(state.wordInput),
+    [state.wordInput],
+  );
+  const isInputDuplicateInSelectedDeck =
+    normalizedInputWordKey.length > 0 &&
+    existingDeckWordKeys.has(normalizedInputWordKey);
+  const isInputDuplicateGloballyWithoutDeck =
+    !currentDeck &&
+    normalizedInputWordKey.length > 0 &&
+    existingGlobalWordKeys.has(normalizedInputWordKey);
+  const isInputDuplicateBlocked =
+    isInputDuplicateInSelectedDeck || isInputDuplicateGloballyWithoutDeck;
+  const findDuplicateDeckNames = (normalizedWordKey: string): string[] => {
+    if (!normalizedWordKey) {
+      return [];
     }
 
-    let isCancelled = false;
+    const duplicateDeckIdSet = new Set(
+      allCards
+        .filter((card) => normalizeWordKey(card.front) === normalizedWordKey)
+        .map((card) => card.deckId),
+    );
 
-    const finalizePendingWordLookup = async () => {
-      const trimmedFront = formState.front.trim();
-      if (trimmedFront !== pendingWordLookup.front) {
-        if (!isCancelled) {
-          setPendingWordLookup(null);
-        }
-        return;
-      }
+    return decks
+      .filter((deck) => duplicateDeckIdSet.has(deck.id))
+      .map((deck) => deck.name);
+  };
+  const duplicateDeckNames = useMemo(() => {
+    return findDuplicateDeckNames(normalizedInputWordKey);
+  }, [allCards, decks, normalizedInputWordKey]);
+  const showDuplicateParseAlert = (normalizedWordKey: string) => {
+    const names = currentDeck
+      ? findDuplicateDeckNames(normalizedWordKey).filter(
+          (deckName) => deckName === currentDeck.name,
+        )
+      : findDuplicateDeckNames(normalizedWordKey);
+    const duplicateDeckLabel = names.length > 0 ? names.join(", ") : "another deck";
+    const message = `This character already exists in your deck: ${duplicateDeckLabel}.`;
 
-      const nextPinyin = formState.pinyin.trim();
-      const nextMeaning = formState.meaning.trim();
-      const lookupChanged =
-        nextPinyin !== pendingWordLookup.pinyin ||
-        nextMeaning !== pendingWordLookup.meaning;
-
-      if (
-        !lookupChanged &&
-        wordLookupPreview?.front !== pendingWordLookup.front
-      ) {
-        if (!isCancelled) {
-          setPendingWordLookup(null);
-        }
-        return;
-      }
-
-      if (!nextPinyin && !nextMeaning) {
-        if (!isCancelled) {
-          setPendingWordLookup(null);
-        }
-        return;
-      }
-
-      const index = await loadCedict();
-      const breakdown = buildExampleBreakdown(trimmedFront, index, {
-        pinyinOverride: nextPinyin || undefined,
-        translation: nextMeaning || undefined,
-      });
-
-      if (!isCancelled) {
-        setWordLookupPreview({
-          front: trimmedFront,
-          breakdown,
-        });
-        setPendingWordLookup(null);
-      }
-    };
-
-    void finalizePendingWordLookup();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [
-    pendingWordLookup,
-    isAutoFetching,
-    formState.front,
-    formState.pinyin,
-    formState.meaning,
-    wordLookupPreview,
-  ]);
-
-  const handleWordLookup = async () => {
-    const trimmedFront = formState.front.trim();
-    if (!trimmedFront) {
-      return;
-    }
-
-    setPendingWordLookup({
-      front: trimmedFront,
-      pinyin: formState.pinyin.trim(),
-      meaning: formState.meaning.trim(),
+    setDuplicateParseAlert({
+      open: true,
+      title: "Duplicate Character",
+      message,
     });
+  };
 
-    await onAutoFetch();
+  const handleCopyPrompt = async () => {
+    const word = state.wordInput.trim();
+    if (!word) {
+      return;
+    }
+
+    if (isInputDuplicateBlocked) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(generatePrompt(word));
+    dispatch({ type: "prompt-copied" });
+  };
+
+  const handleCopyError = async () => {
+    if (!state.parseCopyMessage.trim()) {
+      return;
+    }
+
+    if (!navigator.clipboard?.writeText) {
+      return;
+    }
+
+    const baseMessage = state.parseCopyMessage.trim();
+    const copyMessage = baseMessage.includes("Adjust all of them")
+      ? baseMessage
+      : `${baseMessage}${baseMessage.endsWith(".") ? "" : "."} ${GLOBAL_FIELDS_SCOPE_MESSAGE}`;
+
+    await navigator.clipboard.writeText(copyMessage);
+    setErrorCopied(true);
+  };
+
+  const handleSavePreviewCard = async () => {
+    if (!state.previewCard) {
+      return;
+    }
+
+    if (!currentDeck) {
+      dispatch({
+        type: "parse-result",
+        parseStatus: "error",
+        previewCard: state.previewCard,
+        parseMessage: "Select a deck before adding this card.",
+        parseCopyMessage: "Select a deck before adding this card.",
+      });
+      return;
+    }
+
+    const normalizedPreviewWordKey = normalizeWordKey(state.previewCard.front);
+    if (
+      normalizedPreviewWordKey &&
+      existingDeckWordKeys.has(normalizedPreviewWordKey)
+    ) {
+      dispatch({
+        type: "parse-result",
+        parseStatus: "error",
+        previewCard: state.previewCard,
+        parseMessage:
+          "This word already exists in the selected deck. Use Deck Inventory to review it.",
+        parseCopyMessage:
+          "This word already exists in the selected deck. Use Deck Inventory to review it.",
+      });
+      return;
+    }
+
+    const didSave = await onSaveCard(state.previewCard);
+    if (didSave) {
+      dispatch({ type: "clear" });
+    }
+  };
+
+  const handleParseFromClipboard = async () => {
+    const requestedWord = state.wordInput.trim();
+    const hasRequestedWord = requestedWord.length > 0;
+
+    if (hasRequestedWord && isInputDuplicateBlocked) {
+      showDuplicateParseAlert(normalizedInputWordKey);
+      return;
+    }
+
+    dispatch({ type: "parse-start" });
+
+    try {
+      if (!navigator.clipboard?.readText) {
+        throw new Error(
+          "Clipboard reading is unavailable in this browser. Copy the AI response, then open NeonLang in a browser that supports clipboard access.",
+        );
+      }
+
+      const clipboardText = await navigator.clipboard.readText();
+      if (!clipboardText.trim()) {
+        throw new Error(
+          "Clipboard is empty. Copy the AI response first, then parse again.",
+        );
+      }
+
+      if (isPromptTemplateText(clipboardText)) {
+        dispatch({
+          type: "parse-result",
+          parseStatus: "idle",
+          previewCard: null,
+          parseMessage: "",
+          parseCopyMessage: "",
+        });
+        setDuplicateParseAlert({
+          open: true,
+          title: "Parser Tip",
+          message:
+            "You copied the NeonLang prompt. Paste it into your AI first so it can generate a response, then copy that AI response and parse it here.",
+        });
+        return;
+      }
+
+      const clipboardTargetWord =
+        extractClipboardTargetWord(clipboardText) || requestedWord;
+      const normalizedClipboardTargetWordKey = normalizeWordKey(clipboardTargetWord);
+      const duplicateInParseScope =
+        normalizedClipboardTargetWordKey.length > 0 &&
+        (currentDeck
+          ? existingDeckWordKeys.has(normalizedClipboardTargetWordKey)
+          : existingGlobalWordKeys.has(normalizedClipboardTargetWordKey));
+      if (
+        duplicateInParseScope
+      ) {
+        dispatch({
+          type: "parse-result",
+          parseStatus: "idle",
+          previewCard: null,
+          parseMessage: "",
+          parseCopyMessage: "",
+        });
+        showDuplicateParseAlert(normalizedClipboardTargetWordKey);
+        return;
+      }
+
+      const normalized = normalizeResponse(clipboardText);
+      const repaired = autoRepairResponse(normalized);
+      const parsedData = parseWordResponse(repaired.repairedText);
+      parsedData.metadata = {
+        ...parsedData.metadata,
+        repaired: repaired.repaired,
+        repairNotes: repaired.repairNotes,
+        ...(hasRequestedWord ? { inputWord: requestedWord } : {}),
+      };
+
+      const validation = validateWordResponse(parsedData);
+      if (!validation.isValid) {
+        const resolved = resolveParseErrorMessages(
+          validation.errors[0]?.message ||
+            "The AI response is not in the expected format.",
+        );
+        dispatch({
+          type: "parse-result",
+          parseStatus: "error",
+          previewCard: null,
+          parseMessage: resolved.parseMessage,
+          parseCopyMessage: resolved.parseCopyMessage,
+        });
+        return;
+      }
+
+      const previewCard = await createPreviewCard(
+        parsedData,
+        currentDeck?.id || "",
+      );
+      const normalizedPreviewWordKey = normalizeWordKey(previewCard.front);
+      const isDuplicateParsedWord =
+        normalizedPreviewWordKey.length > 0 &&
+        (currentDeck
+          ? existingDeckWordKeys.has(normalizedPreviewWordKey)
+          : existingGlobalWordKeys.has(normalizedPreviewWordKey));
+      if (isDuplicateParsedWord) {
+        dispatch({
+          type: "parse-result",
+          parseStatus: "idle",
+          previewCard: null,
+          parseMessage: "",
+          parseCopyMessage: "",
+        });
+        showDuplicateParseAlert(normalizedPreviewWordKey);
+        return;
+      }
+      dispatch({
+        type: "parse-result",
+        parseStatus: "success",
+        previewCard,
+        parseMessage: repaired.repaired
+          ? "AI response parsed successfully. Minor formatting issues were repaired automatically."
+          : "AI response parsed successfully.",
+        parseCopyMessage: "",
+      });
+    } catch (error) {
+      const resolved = resolveParseErrorMessages(toUserFacingError(error));
+      dispatch({
+        type: "parse-result",
+        parseStatus: "error",
+        previewCard: null,
+        parseMessage: resolved.parseMessage,
+        parseCopyMessage: resolved.parseCopyMessage,
+      });
+    }
   };
 
   if (decks.length === 0) {
     return (
-      <Card className="border-slate-700 bg-slate-800/30">
+      <Card className="app-panel-soft rounded-[28px]">
         <CardContent className="py-12 text-center text-slate-400">
-          <FolderOpen className="mx-auto mb-4 h-12 w-12 opacity-50" />
-          <p className="mb-4">Create a deck first to add cards.</p>
-          <Button onClick={onGoDecks}>Go to Decks</Button>
+          <FolderOpen className="mx-auto mb-4 h-12 w-12 text-cyan-200/70" />
+          <p className="mb-4 text-base text-slate-200">
+            Create a deck first to add cards.
+          </p>
+          <Button className="app-action-neon" onClick={onGoDecks}>
+            Go to Decks
+          </Button>
         </CardContent>
       </Card>
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <Card className="border-slate-700/80 bg-gradient-to-b from-white/5 via-slate-900/70 to-slate-900/45 shadow-[0_18px_50px_rgba(0,0,0,0.24)]">
-        <CardHeader className="space-y-4 pb-2">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300">
-                <span className="uppercase tracking-[0.22em] text-slate-500">
-                  Deck
-                </span>
-                <span className="text-slate-100">
-                  {currentDeck?.name || "Choose deck"}
-                </span>
+  if (activePanel === "inventory") {
+    if (viewedInventoryCard) {
+      return (
+        <Card className="app-panel-soft rounded-[28px]">
+          <CardHeader className="space-y-2 pb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-cyan-200/75">
+                  Deck Inventory
+                </p>
+                <CardTitle className="mt-1.5 text-slate-100">
+                  {viewedInventoryCard.front}
+                </CardTitle>
+                <CardDescription className="mt-1.5 text-slate-300">
+                  Viewing a saved card from {currentDeck?.name || "this deck"}.
+                </CardDescription>
               </div>
-              <CardTitle className="text-xl text-slate-50 md:text-2xl">
-                Add Card
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setViewedInventoryCard(null)}
+                className="app-action min-w-40"
+              >
+                <Undo2 className="mr-2 h-4 w-4" />
+                Back to Inventory
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <Flashcard
+              key={`${viewedInventoryCard.id}-${viewedInventoryCard.updatedAt}`}
+              card={viewedInventoryCard}
+              previewMode
+              onRate={() => {}}
+              onTTS={onSpeakChinese}
+              hasDedicatedChineseVoice={hasDedicatedChineseVoice}
+            />
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <Card className="app-panel-soft rounded-[28px]">
+        <CardHeader className="space-y-2 pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.22em] text-cyan-200/75">
+                Deck Inventory
+              </p>
+              <CardTitle className="mt-1.5 text-slate-100">
+                Deck Cards
               </CardTitle>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm text-slate-200">Save To Deck</Label>
-              <Select value={currentDeck?.id} onValueChange={onSelectDeck}>
-                <SelectTrigger className="w-full border-slate-600/80 bg-slate-900/80 text-slate-100 hover:bg-slate-900/90 sm:w-[280px]">
-                  <SelectValue placeholder="Choose a deck" />
-                </SelectTrigger>
-                <SelectContent className="border-slate-700 bg-slate-950 text-slate-100">
-                  {decks.map((deck) => (
-                    <SelectItem
-                      key={deck.id}
-                      value={deck.id}
-                      className="text-slate-100 focus:bg-blue-500/12 focus:text-blue-100"
-                    >
-                      {deck.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <div className="grid w-full max-w-sm grid-cols-2 rounded-2xl border border-white/10 bg-slate-950/80 p-1.5 sm:inline-grid">
-                <button
-                  type="button"
-                  onClick={() => setAuthoringMode("word")}
-                  className={`rounded-xl px-4 py-2 text-sm transition-colors ${
-                    authoringMode === "word"
-                      ? "bg-blue-500 text-slate-950 shadow-[0_8px_24px_rgba(96,165,250,0.22)]"
-                      : "text-slate-300 hover:bg-white/[0.06]"
-                  }`}
-                >
-                  Word
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAuthoringMode("sentence")}
-                  className={`rounded-xl px-4 py-2 text-sm transition-colors ${
-                    authoringMode === "sentence"
-                      ? "bg-blue-500 text-slate-950 shadow-[0_8px_24px_rgba(96,165,250,0.22)]"
-                      : "text-slate-300 hover:bg-white/[0.06]"
-                  }`}
-                >
-                  Sentence
-                </button>
-              </div>
-              <CardDescription className="text-sm text-slate-400">
-                {authoringMode === "word"
-                  ? "Use local dictionary lookup to prefill the core study fields."
-                  : "Generate a local sentence preview, then adjust what will be saved if needed."}
+              <CardDescription className="mt-1.5 text-slate-300">
+                Review the cards already stored in{" "}
+                {currentDeck?.name || "the selected deck"}.
               </CardDescription>
             </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setActivePanel("builder")}
+              className="app-action min-w-40"
+            >
+              <Undo2 className="mr-2 h-4 w-4" />
+              Card Builder
+            </Button>
           </div>
         </CardHeader>
-
-        <CardContent className="space-y-6 md:space-y-7">
-          {authoringMode === "word" && (
-            <section className="space-y-5 rounded-2xl border border-white/8 bg-slate-950/35 p-4 md:p-5">
-              <div className="space-y-2.5">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <Label htmlFor="charInput" className="text-sm text-slate-200">
-                    Chinese Word
-                  </Label>
-                  <span className="text-xs text-slate-500">
-                    Start with the word you want to look up and save.
-                  </span>
-                </div>
-                <Input
-                  id="charInput"
-                  value={formState.front}
-                  onChange={(event) => {
-                    const nextFront = event.target.value;
-
-                    if (
-                      wordLookupPreview &&
-                      wordLookupPreview.front !== nextFront.trim()
-                    ) {
-                      setWordLookupPreview(null);
-                    }
-
-                    setPendingWordLookup(null);
-                    onFormChange({ front: nextFront });
-                  }}
-                  placeholder="你好"
-                  className={`h-13 ${sourceChineseInputClass}`}
-                />
-              </div>
-
-              <WorkflowActionPanel
-                title="Fill from dictionary"
-                description="Generate local pinyin and meaning from the built-in dictionary before you decide what to save."
-                action={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void handleWordLookup()}
-                    disabled={isAutoFetching || !formState.front.trim()}
-                    className="min-w-[164px] border-blue-400/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/18 focus-visible:border-blue-300/60 disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
-                  >
-                    {isAutoFetching ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="mr-2 h-4 w-4" />
-                    )}
-                    {isAutoFetching ? "Translating..." : "Translate"}
-                  </Button>
-                }
-              />
-
-              {activeWordPreview && (
-                <div className="space-y-5 rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] p-5 shadow-[0_20px_48px_rgba(0,0,0,0.24)] md:p-6">
-                  <div className="space-y-3 border-b border-white/8 pb-4">
-                    <p className="font-chinese-ui text-3xl font-semibold tracking-tight text-white md:text-4xl">
-                      {activeWordPreview.front}
-                    </p>
-                    {activeWordPreview.breakdown.pinyin && (
-                      <p className="text-sm leading-6 text-blue-100/75 md:text-base">
-                        {convertPinyinTones(activeWordPreview.breakdown.pinyin)}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-500">
-                      Meaning preview
-                    </p>
-                    <p className="text-base leading-7 text-slate-50 md:text-lg">
-                      {activeWordPreview.breakdown.translation ||
-                        "No meaning returned from the current lookup."}
-                    </p>
-                  </div>
-
-                  <div className="space-y-3 border-t border-white/8 pt-4">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-sm font-medium text-slate-200">
-                        Interactive word map
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        Select a word group or character to inspect the
-                        breakdown.
-                      </p>
-                    </div>
-                    <CharacterBreakdown
-                      segments={activeWordPreview.breakdown.segments}
-                      pinyin={activeWordPreview.breakdown.pinyin}
-                      translation={activeWordPreview.breakdown.translation}
-                      literalGloss={activeWordPreview.breakdown.literalGloss}
-                      variant="compact"
-                      showPinyinLine={false}
-                      showTranslationLine={false}
-                      showLiteralGlossLine={false}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {!activeWordPreview && hasWordDraft && (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/35 p-4 text-sm leading-6 text-slate-400">
-                  Run dictionary lookup to preview generated pinyin and meaning
-                  before saving.
-                </div>
-              )}
-
-              <div className="space-y-4 rounded-2xl border border-white/8 bg-slate-950/30 p-4 md:p-5">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-slate-200">
-                      Save with card
-                    </p>
-                    <p className="text-xs leading-5 text-slate-500">
-                      Editable before saving. Keep the lookup result as-is, or
-                      adjust the wording to match how you want to study it.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <Label
-                        htmlFor="pinyinInput"
-                        className="text-sm text-slate-200"
-                      >
-                        Saved pinyin
-                      </Label>
-                      {formState.pinyin && (
-                        <span className="text-xs text-blue-200">
-                          {convertPinyinTones(formState.pinyin)}
-                        </span>
-                      )}
-                    </div>
-                    <Input
-                      id="pinyinInput"
-                      value={formState.pinyin}
-                      onChange={(event) =>
-                        onFormChange({ pinyin: event.target.value })
-                      }
-                      onBlur={() =>
-                        onFormChange({
-                          pinyin: convertPinyinTones(formState.pinyin),
-                        })
-                      }
-                      placeholder="nǐ hǎo"
-                      className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
-                    />
-                  </div>
-
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <Label
-                        htmlFor="meaningInput"
-                        className="text-sm text-slate-200"
-                      >
-                        Saved meaning
-                      </Label>
-                    </div>
-                    <Input
-                      id="meaningInput"
-                      value={formState.meaning}
-                      onChange={(event) =>
-                        onFormChange({ meaning: event.target.value })
-                      }
-                      placeholder="Hello, hi"
-                      className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {authoringMode === "sentence" && (
-            <section className="space-y-5 rounded-2xl border border-white/8 bg-slate-950/35 p-4 md:p-5">
-              <div className="space-y-2.5">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <Label
-                    htmlFor="exampleInput"
-                    className="text-sm text-slate-200"
-                  >
-                    Chinese Sentence
-                  </Label>
-                  <span className="text-xs text-slate-500">
-                    The preview below is generated locally before save.
-                  </span>
-                </div>
-                <Textarea
-                  id="exampleInput"
-                  value={formState.example}
-                  onChange={(event) =>
-                    onFormChange({ example: event.target.value })
-                  }
-                  placeholder="你好吗？"
-                  className={`resize-y ${sourceChineseInputClass}`}
-                  rows={1}
-                />
-              </div>
-
-              <WorkflowActionPanel
-                title="Analyze sentence"
-                description="Review segmentation, pinyin, and generated meaning before saving."
-                action={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void onAnalyzeSentence()}
-                    disabled={isAnalyzingSentence || !formState.example.trim()}
-                    className="min-w-[164px] border-blue-400/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/18 focus-visible:border-blue-300/60 disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-slate-500"
-                  >
-                    {isAnalyzingSentence ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="mr-2 h-4 w-4" />
-                    )}
-                    {isAnalyzingSentence ? "Translating..." : "Translate"}
-                  </Button>
-                }
-              />
-
-              {analysisPreview && (
-                <div className="space-y-5 rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] p-5 shadow-[0_20px_48px_rgba(0,0,0,0.24)] md:p-6">
-                  <div className="space-y-3 border-b border-white/8 pb-4">
-                    <p className="font-chinese-ui text-3xl font-semibold tracking-tight text-white md:text-4xl">
-                      {analysisPreview.sentence}
-                    </p>
-                    <p className="text-sm leading-6 text-blue-100/75 md:text-base">
-                      {convertPinyinTones(analyzedPinyin)}
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-500">
-                      Meaning preview
-                    </p>
-                    <p className="text-base leading-7 text-slate-50 md:text-lg">
-                      {analyzedTranslation}
-                    </p>
-                  </div>
-
-                  <div className="space-y-3 border-t border-white/8 pt-4">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-sm font-medium text-slate-200">
-                        Interactive sentence map
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        Select a word group or character to inspect the
-                        breakdown.
-                      </p>
-                    </div>
-                    <CharacterBreakdown
-                      segments={analysisPreview.segments}
-                      pinyin={analyzedPinyin}
-                      translation={analyzedTranslation}
-                      literalGloss={analysisPreview.literalGloss}
-                      variant="compact"
-                      showPinyinLine={false}
-                      showTranslationLine={false}
-                      showLiteralGlossLine={false}
-                    />
-                  </div>
-
-                  <details className="rounded-2xl border border-white/8 bg-white/[0.03] open:bg-white/[0.04]">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-slate-200 [&::-webkit-details-marker]:hidden">
-                      <span className="inline-flex items-center gap-2">
-                        <CircleHelp className="h-4 w-4 text-slate-400" />
-                        Why this translation?
-                      </span>
-                      <span className="text-xs text-slate-500">
-                        Supporting notes
-                      </span>
-                    </summary>
-                    <div className="space-y-3 border-t border-white/8 px-4 py-4 text-sm leading-6 text-slate-300">
-                      <p>
-                        {getTranslationSourceExplanation(
-                          analysisPreview.translationSource,
-                        )}
-                      </p>
-                      {shouldShowLiteralGloss(
-                        analysisPreview.translation,
-                        analysisPreview.literalGloss,
-                      ) ? (
-                        <div className="rounded-xl border border-white/8 bg-slate-900/60 p-3">
-                          <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-slate-500">
-                            Literal gloss
-                          </p>
-                          <p className="mt-2 text-slate-300">
-                            {analysisPreview.literalGloss || "-"}
-                          </p>
-                        </div>
-                      ) : null}
-                    </div>
-                  </details>
-                </div>
-              )}
-
-              {!analysisPreview && hasSentenceDraft && (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/35 p-4 text-sm leading-6 text-slate-400">
-                  Run sentence analysis to preview the generated pinyin,
-                  meaning, and segmentation before saving.
-                </div>
-              )}
-
-              <div className="space-y-4 rounded-2xl border border-white/8 bg-slate-950/30 p-4 md:p-5">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-slate-200">
-                      Save with card
-                    </p>
-                    <p className="text-xs leading-5 text-slate-500">
-                      Editable before saving. Leave generated values as-is, or
-                      replace them with your own wording.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <Label
-                        htmlFor="examplePinyin"
-                        className="text-sm text-slate-200"
-                      >
-                        Saved pinyin
-                      </Label>
-                      {formState.examplePinyin && (
-                        <span className="text-xs text-blue-200">
-                          {convertPinyinTones(formState.examplePinyin)}
-                        </span>
-                      )}
-                    </div>
-                    <Input
-                      id="examplePinyin"
-                      value={formState.examplePinyin}
-                      onChange={(event) =>
-                        onFormChange({ examplePinyin: event.target.value })
-                      }
-                      onBlur={() =>
-                        onFormChange({
-                          examplePinyin: convertPinyinTones(
-                            formState.examplePinyin,
-                          ),
-                        })
-                      }
-                      placeholder="nǐ hǎo ma"
-                      className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
-                    />
-                  </div>
-
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <Label
-                        htmlFor="exampleTranslation"
-                        className="text-sm text-slate-200"
-                      >
-                        Saved meaning
-                      </Label>
-                    </div>
-                    <Input
-                      id="exampleTranslation"
-                      value={formState.exampleTranslation}
-                      onChange={(event) =>
-                        onFormChange({ exampleTranslation: event.target.value })
-                      }
-                      placeholder="How are you?"
-                      className="border-slate-600/80 bg-slate-900/80 text-slate-100 focus-visible:border-blue-400/60"
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
-
-          <div className="flex justify-end border-t border-white/8 pt-5">
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setPendingWordLookup(null);
-                  setWordLookupPreview(null);
-                  onClearForm();
-                }}
-                className="border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
-              >
-                Clear form
-              </Button>
-              <Button
-                onClick={() => void onCreateCard()}
-                size="lg"
-                className="min-w-[180px] bg-blue-500 text-slate-950 shadow-[0_10px_30px_rgba(96,165,250,0.28)] hover:bg-blue-400"
-              >
-                <Check className="mr-2 h-4 w-4" />
-                Add Card
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-slate-700/70 bg-gradient-to-b from-white/5 to-transparent">
-        <CardHeader>
-          <CardTitle className="text-slate-100">Deck Cards</CardTitle>
-          <CardDescription className="text-slate-400">
-            View, edit, and search cards in{" "}
-            {currentDeck?.name || "the selected deck"}.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-4 space-y-2">
+        <CardContent className="space-y-3 pt-0">
+          <div className="app-surface rounded-2xl p-3.5">
             <Label
               htmlFor="deck-card-search"
-              className="text-sm text-slate-200"
+              className="text-xs uppercase tracking-[0.18em] text-slate-500"
             >
-              Search this deck
+              Search Cards
             </Label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <Input
-                id="deck-card-search"
-                value={deckCardSearch}
-                onChange={(event) => setDeckCardSearch(event.target.value)}
-                placeholder="Search by Chinese, pinyin, English meaning, or example"
-                className="border-slate-600/80 bg-slate-900/80 pl-9 text-slate-100 focus-visible:border-blue-400/60"
-              />
-            </div>
+            <Input
+              id="deck-card-search"
+              value={deckCardSearch}
+              onChange={(event) => setDeckCardSearch(event.target.value)}
+              placeholder="Character, pinyin or meaning"
+              className="app-field mt-2.5"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              {filteredCards.length} of {cardsInDeck.length} cards
+            </p>
           </div>
 
           {cardsInDeck.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/35 p-5 text-sm text-slate-400">
-              No cards in this deck yet. Add your first card above to start
-              building a study set.
+            <div className="app-surface rounded-2xl border-dashed p-5 text-sm text-slate-400">
+              No cards in this deck yet.
             </div>
-          ) : filteredCardsInDeck.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/35 p-5 text-sm text-slate-400">
-              No cards matched that search in this deck.
+          ) : filteredCards.length === 0 ? (
+            <div className="app-surface rounded-2xl border-dashed p-5 text-sm text-slate-400">
+              No cards matched that search.
             </div>
           ) : (
-            <div className="max-h-[360px] space-y-3 overflow-y-auto pr-1">
-              {filteredCardsInDeck.map((card) => (
-                <EditableCardRow
+            <div className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
+              {filteredCards.map((card) => (
+                <DeckCardRow
                   key={card.id}
                   card={card}
                   onDelete={onDeleteCard}
-                  onSave={onEditCard}
+                  onViewCard={setViewedInventoryCard}
                 />
               ))}
             </div>
           )}
         </CardContent>
       </Card>
-    </div>
+    );
+  }
+
+  return (
+    <>
+      {duplicateParseAlert.open && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/56 px-4">
+          <div className="app-panel w-full max-w-md rounded-[24px] border border-cyan-300/22 bg-[linear-gradient(180deg,rgba(8,12,18,0.94),rgba(4,7,12,0.96))] p-5 text-slate-100 shadow-[0_0_0_1px_rgba(56,189,248,0.14),0_16px_54px_rgba(2,132,199,0.16)]">
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-200/85">
+              {duplicateParseAlert.title}
+            </p>
+            <p className="mt-2.5 text-sm text-slate-200">
+              {duplicateParseAlert.message}
+            </p>
+            <div className="mt-5 flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="app-action"
+                onClick={() =>
+                  setDuplicateParseAlert((prev) => ({ ...prev, open: false }))
+                }
+              >
+                I understand
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      <Card className="app-panel rounded-[28px]">
+        <CardHeader className="space-y-3 pb-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.22em] text-cyan-200/75">
+              Card Builder
+            </p>
+            <CardTitle className="mt-1.5 text-xl text-slate-50 md:text-2xl">
+              AI Word Analyzer
+            </CardTitle>
+            <CardDescription className="mt-1.5 max-w-2xl text-slate-300">
+              Copy the prompt, ask your AI tool for a structured word entry,
+              then parse the copied response directly from your clipboard.
+            </CardDescription>
+          </div>
+          <div className="flex w-full items-center gap-2 sm:w-[216px] sm:flex-col sm:items-end">
+            <div className="inline-flex min-w-0 flex-1 items-center justify-between gap-3 rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-xs text-slate-300 sm:w-full sm:flex-none">
+              <span className="uppercase tracking-[0.22em] text-slate-500">
+                Deck
+              </span>
+              <span className="max-w-[120px] truncate text-right text-sm font-medium text-slate-100 sm:max-w-[132px]">
+                {currentDeck?.name || "Choose deck"}
+              </span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setActivePanel("inventory")}
+              className="app-action shrink-0 sm:w-full"
+            >
+              Deck Inventory
+            </Button>
+          </div>
+        </div>
+
+        <div className="app-surface rounded-2xl p-3.5">
+          <Label className="text-xs uppercase tracking-[0.18em] text-slate-500">
+            Save To Deck
+          </Label>
+          <Select value={currentDeck?.id} onValueChange={onSelectDeck}>
+            <SelectTrigger className="app-field mt-2.5 w-full sm:w-[320px]">
+              <SelectValue placeholder="Choose a deck" />
+            </SelectTrigger>
+            <SelectContent className="border-white/10 bg-slate-950 text-slate-100">
+              {decks.map((deck) => (
+                <SelectItem key={deck.id} value={deck.id}>
+                  {deck.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </CardHeader>
+
+        <CardContent className="space-y-4 pt-0">
+        <div className="app-surface rounded-2xl p-3.5">
+          <Label
+            htmlFor="word-input"
+            className="text-xs uppercase tracking-[0.18em] text-slate-500"
+          >
+            Word input
+          </Label>
+          <Textarea
+            id="word-input"
+            value={state.wordInput}
+            onChange={(event) =>
+              dispatch({ type: "set-word", value: event.target.value })
+            }
+            placeholder="Enter a Chinese word..."
+            rows={1}
+            className="app-field mt-2.5 min-h-12 resize-none font-chinese-ui text-sm leading-snug placeholder:text-sm sm:text-sm sm:leading-snug sm:placeholder:text-sm"
+          />
+          {isInputDuplicateBlocked && (
+            <p className="mt-2 text-xs text-amber-200">
+              This word already exists in{" "}
+              {duplicateDeckNames.length > 0
+                ? `deck${duplicateDeckNames.length > 1 ? "s" : ""}: ${duplicateDeckNames.join(", ")}.`
+                : "another deck."}
+            </p>
+          )}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void handleCopyPrompt()}
+              disabled={!state.wordInput.trim() || isInputDuplicateBlocked}
+              className="app-action-neon"
+            >
+            <Copy className="mr-2 h-4 w-4" />
+            {state.promptCopied ? "Prompt copied" : "Copy AI Prompt"}
+          </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void handleParseFromClipboard()}
+              disabled={state.parseStatus === "parsing"}
+              className="app-action-positive"
+            >
+            {state.parseStatus === "parsing" ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="mr-2 h-4 w-4" />
+            )}
+            Parse AI Response
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => dispatch({ type: "clear" })}
+            className="app-action"
+          >
+            Clear
+          </Button>
+        </div>
+
+        {state.parseMessage && (
+          <div
+            className={`rounded-2xl border px-4 py-3 text-sm ${
+              state.parseStatus === "success"
+                ? "border-cyan-300/20 bg-cyan-300/8 text-cyan-100"
+                : state.parseStatus === "error"
+                  ? "border-amber-300/20 bg-amber-300/8 text-amber-100"
+                : "border-white/10 bg-white/[0.03] text-slate-300"
+            }`}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <p className="max-w-[780px]">{state.parseMessage}</p>
+              {state.parseStatus === "error" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleCopyError()}
+                  className="app-action-neon h-9 w-[170px] justify-center px-3.5 text-xs font-semibold whitespace-nowrap ring-1 ring-cyan-300/35"
+                >
+                  <Copy className="mr-1.5 h-3.5 w-3.5" />
+                  {errorCopied ? "Copied" : "Copy Error Message"}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {state.previewCard && (
+          <div className="app-surface space-y-3 rounded-2xl p-3.5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-cyan-200/75">
+                  Preview
+                </p>
+                <p className="mt-1.5 text-sm font-medium text-slate-200">
+                  Flashcard preview
+                </p>
+                <p className="text-xs text-slate-500">
+                  Token meanings and sentence audio are active in the preview.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    onSpeakChinese(state.previewCard?.front || "", {
+                      debugSource: "add-preview-word",
+                    })
+                  }
+                  className="app-action"
+                >
+                  <Volume2 className="mr-2 h-4 w-4" />
+                  Listen word
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void handleSavePreviewCard()}
+                  disabled={
+                    state.previewCard
+                      ? existingDeckWordKeys.has(
+                          normalizeWordKey(state.previewCard.front),
+                        )
+                      : false
+                  }
+                  className="app-action-neon"
+                >
+                  <Check className="mr-2 h-4 w-4" />
+                  Add Card
+                </Button>
+              </div>
+            </div>
+            {state.previewCard &&
+              existingDeckWordKeys.has(normalizeWordKey(state.previewCard.front)) && (
+                <p className="text-xs text-amber-200">
+                  This word is already in the selected deck.
+                </p>
+              )}
+
+            <Flashcard
+              key={`${state.previewCard.id}-${state.previewCard.front}-${state.previewCard.updatedAt}`}
+              card={state.previewCard}
+              previewMode
+              onRate={() => {}}
+              onTTS={onSpeakChinese}
+              hasDedicatedChineseVoice={hasDedicatedChineseVoice}
+            />
+          </div>
+        )}
+        </CardContent>
+      </Card>
+    </>
   );
 }

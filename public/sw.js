@@ -1,15 +1,25 @@
-const CACHE_NAME = 'chinese-flashcards-v1';
-const URLS_TO_CACHE = [
-  '/',
-  '/manifest.json',
-  '/logo.svg',
-  '/offline.html'
-];
+const STATIC_CACHE_NAME = 'chinese-flashcards-static-v2';
+const RUNTIME_CACHE_NAME = 'chinese-flashcards-runtime-v2';
+const URLS_TO_CACHE = ['/manifest.json', '/logo.svg', '/offline.html'];
+
+function isNavigationRequest(request) {
+  return request.mode === 'navigate';
+}
+
+function isCacheableAsset(url) {
+  return (
+    url.pathname.startsWith('/_next/static/') ||
+    url.pathname === '/manifest.json' ||
+    url.pathname === '/logo.svg' ||
+    url.pathname.startsWith('/icons/') ||
+    url.pathname.startsWith('/data/')
+  );
+}
 
 // Install event - cache essential files
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
+    caches.open(STATIC_CACHE_NAME).then((cache) => {
       return cache.addAll(URLS_TO_CACHE).catch(() => {
         // If offline page doesn't exist, that's okay
         return cache.addAll(URLS_TO_CACHE.filter(url => url !== '/offline.html'));
@@ -25,7 +35,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
+          if (cacheName !== STATIC_CACHE_NAME && cacheName !== RUNTIME_CACHE_NAME) {
             return caches.delete(cacheName);
           }
         })
@@ -47,34 +57,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      // Cache hit - return response
-      if (response) {
-        return response;
-      }
+  const requestUrl = new URL(event.request.url);
 
-      return fetch(event.request).then((response) => {
-        // Check if we received a valid response
-        if (!response || response.status !== 200 || response.type === 'error') {
-          return response;
-        }
-
-        // Clone the response
-        const responseToCache = response.clone();
-
-        // Cache successful GET requests (except API calls)
-        if (!event.request.url.includes('/api/')) {
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-
-        return response;
-      }).catch(() => {
-        // Network error - return offline page if available
+  if (isNavigationRequest(event.request)) {
+    event.respondWith(
+      fetch(event.request).catch(() => {
         return caches.match('/offline.html').catch(() => {
-          // If offline page doesn't exist, return a basic offline response
           return new Response('You are offline', {
             status: 503,
             statusText: 'Service Unavailable',
@@ -83,8 +71,34 @@ self.addEventListener('fetch', (event) => {
             })
           });
         });
+      })
+    );
+    return;
+  }
+
+  if (!isCacheableAsset(requestUrl)) {
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      const networkFetch = fetch(event.request).then((networkResponse) => {
+        if (
+          networkResponse &&
+          networkResponse.status === 200 &&
+          networkResponse.type !== 'error'
+        ) {
+          const responseToCache = networkResponse.clone();
+          caches.open(RUNTIME_CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+
+        return networkResponse;
       });
-    })
+
+      return response || networkFetch;
+    }).catch(() => caches.match(event.request))
   );
 });
 

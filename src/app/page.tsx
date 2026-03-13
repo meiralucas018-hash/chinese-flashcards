@@ -1,157 +1,113 @@
 "use client";
 
-import { useCallback, useMemo, useState, type ChangeEvent } from "react";
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
+import {
+  BarChart3,
   FolderOpen,
-  GraduationCap,
   Loader2,
   Plus,
-  Search,
   Settings,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type {
   Card as CardType,
   Deck,
+  QuizPerformanceInput,
   Rating,
-  SentenceAnalysis,
   TabType,
 } from "@/types";
 import { getDueCards, initializeNewCard } from "@/lib/srs";
 import * as flashcardDb from "@/lib/flashcard-db";
-import { buildExampleBreakdown, loadCedict, searchCedict } from "@/lib/cedict";
-import { convertPinyinTones } from "@/lib/pinyin";
-import { useToastMessage } from "@/hooks/use-toast-message";
-import { useFlashcardData } from "@/hooks/use-flashcard-data";
 import DecksView from "@/components/views/DecksView";
 import StudyView from "@/components/views/StudyView";
-import AddCardView, {
-  type NewCardFormState,
-} from "../components/views/AddCardView";
-import SearchView from "@/components/views/SearchView";
+import AddCardView from "@/components/views/AddCardView";
 import SettingsView from "@/components/views/SettingsView";
+import StatisticsView from "@/components/views/StatisticsView";
+import { useToastMessage } from "@/hooks/use-toast-message";
+import { useFlashcardData } from "@/hooks/use-flashcard-data";
+import {
+  clearBadVoiceCache,
+  getBestChineseVoice,
+  getTtsDiagnosticsSnapshot,
+  isBadVoiceCached,
+  loadSpeechVoices,
+  speakText,
+  subscribeToTtsDiagnostics,
+  type SpeakTextOptions,
+  type TtsDiagnosticsSnapshot,
+} from "@/lib/tts";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
 }
 
-const EMPTY_FORM: NewCardFormState = {
-  front: "",
-  pinyin: "",
-  meaning: "",
-  example: "",
-  examplePinyin: "",
-  exampleTranslation: "",
+function normalizeWordKey(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+interface TtsSettings {
+  voiceURI: string;
+  rate: number;
+  pitch: number;
+  volume: number;
+  studyMode: boolean;
+  preferredLang: string;
+}
+
+const TTS_SETTINGS_STORAGE_KEY = "chinese-flashcards:tts-settings";
+
+const DEFAULT_TTS_SETTINGS: TtsSettings = {
+  voiceURI: "",
+  rate: 0.92,
+  pitch: 1,
+  volume: 1,
+  studyMode: false,
+  preferredLang: "zh-CN",
 };
 
-const EMPTY_EXAMPLE_BREAKDOWN: CardType["exampleBreakdown"] = {
-  sentence: "",
-  pinyin: "",
-  translation: "",
-  literalGloss: "",
-  translationSource: "fallback",
-  confidence: 0,
-  segments: [],
-};
+function normalizeTtsSettings(input: unknown): TtsSettings {
+  const source =
+    input && typeof input === "object" ? (input as Partial<TtsSettings>) : {};
 
-function normalizeExampleSentence(value: string | undefined): string {
-  return value?.trim() || "";
-}
-
-function normalizeExampleBreakdown(
-  exampleBreakdown: Partial<CardType["exampleBreakdown"]> | null | undefined,
-  sentenceOverride?: string,
-): CardType["exampleBreakdown"] {
-  const sentence = normalizeExampleSentence(
-    sentenceOverride ?? exampleBreakdown?.sentence,
-  );
+  const numberInRange = (
+    value: unknown,
+    fallback: number,
+    min: number,
+    max: number,
+  ): number => {
+    if (typeof value !== "number" || Number.isNaN(value)) return fallback;
+    return Math.min(max, Math.max(min, value));
+  };
 
   return {
-    ...EMPTY_EXAMPLE_BREAKDOWN,
-    sentence,
-    pinyin: exampleBreakdown?.pinyin?.trim() || "",
-    translation: exampleBreakdown?.translation?.trim() || "",
-    literalGloss: exampleBreakdown?.literalGloss?.trim() || "",
-    translationSource:
-      exampleBreakdown?.translationSource === "exact" ||
-      exampleBreakdown?.translationSource === "rule" ||
-      exampleBreakdown?.translationSource === "fallback"
-        ? exampleBreakdown.translationSource
-        : EMPTY_EXAMPLE_BREAKDOWN.translationSource,
-    confidence:
-      typeof exampleBreakdown?.confidence === "number"
-        ? exampleBreakdown.confidence
-        : EMPTY_EXAMPLE_BREAKDOWN.confidence,
-    segments: Array.isArray(exampleBreakdown?.segments)
-      ? exampleBreakdown.segments
-      : EMPTY_EXAMPLE_BREAKDOWN.segments,
+    voiceURI:
+      typeof source.voiceURI === "string"
+        ? source.voiceURI
+        : DEFAULT_TTS_SETTINGS.voiceURI,
+    rate: numberInRange(source.rate, DEFAULT_TTS_SETTINGS.rate, 0.5, 1.5),
+    pitch: numberInRange(source.pitch, DEFAULT_TTS_SETTINGS.pitch, 0.5, 1.5),
+    volume: numberInRange(source.volume, DEFAULT_TTS_SETTINGS.volume, 0, 1),
+    studyMode:
+      typeof source.studyMode === "boolean"
+        ? source.studyMode
+        : DEFAULT_TTS_SETTINGS.studyMode,
+    preferredLang:
+      typeof source.preferredLang === "string" &&
+      source.preferredLang.trim().length > 0
+        ? source.preferredLang
+        : DEFAULT_TTS_SETTINGS.preferredLang,
   };
-}
-
-function toExampleBreakdownFromAnalysis(
-  analysis: SentenceAnalysis,
-  overrides?: {
-    pinyin?: string;
-    translation?: string;
-  },
-): CardType["exampleBreakdown"] {
-  return normalizeExampleBreakdown(
-    {
-      sentence: analysis.sentence,
-      pinyin: overrides?.pinyin?.trim() || analysis.pinyin,
-      translation: overrides?.translation?.trim() || analysis.translation,
-      literalGloss: analysis.literalGloss,
-      translationSource: analysis.translationSource,
-      confidence: analysis.confidence,
-      segments: analysis.segments,
-    },
-    analysis.sentence,
-  );
-}
-
-function toSentenceAnalysis(
-  exampleBreakdown: CardType["exampleBreakdown"],
-): SentenceAnalysis {
-  const normalizedBreakdown = normalizeExampleBreakdown(exampleBreakdown);
-
-  return {
-    sentence: normalizedBreakdown.sentence,
-    translation: normalizedBreakdown.translation,
-    literalGloss: normalizedBreakdown.literalGloss,
-    translationSource: normalizedBreakdown.translationSource,
-    confidence: normalizedBreakdown.confidence,
-    pinyin: normalizedBreakdown.pinyin,
-    segments: normalizedBreakdown.segments,
-    characters: normalizedBreakdown.segments.flatMap(
-      (segment) => segment.chars,
-    ),
-  };
-}
-
-function buildUsageExamples(
-  exampleBreakdown: CardType["exampleBreakdown"],
-): CardType["usageExamples"] | undefined {
-  const normalizedBreakdown = normalizeExampleBreakdown(exampleBreakdown);
-
-  if (
-    !normalizedBreakdown.sentence ||
-    normalizedBreakdown.segments.length === 0
-  ) {
-    return undefined;
-  }
-
-  return [
-    {
-      label: "Example",
-      sentence: normalizedBreakdown.sentence,
-      pinyin: normalizedBreakdown.pinyin,
-      translation: normalizedBreakdown.translation,
-      literalGloss: normalizedBreakdown.literalGloss,
-      translationSource: normalizedBreakdown.translationSource,
-      confidence: normalizedBreakdown.confidence,
-      breakdown: normalizedBreakdown.segments,
-    },
-  ];
 }
 
 export default function ChineseFlashcardApp() {
@@ -159,18 +115,30 @@ export default function ChineseFlashcardApp() {
   const [currentDeck, setCurrentDeck] = useState<Deck | null>(null);
   const [studyQueue, setStudyQueue] = useState<CardType[]>([]);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
-  const [newCardForm, setNewCardForm] = useState<NewCardFormState>(EMPTY_FORM);
-  const [isAutoFetching, setIsAutoFetching] = useState(false);
-  const [isAnalyzingSentence, setIsAnalyzingSentence] = useState(false);
-  const [sentenceAnalysis, setSentenceAnalysis] =
-    useState<SentenceAnalysis | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<ReturnType<
-    typeof searchCedict
-  > | null>(null);
+  const [ttsSettings, setTtsSettings] = useState<TtsSettings>(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_TTS_SETTINGS;
+    }
 
-  const { toast, showToast } = useToastMessage();
+    try {
+      const raw = window.localStorage.getItem(TTS_SETTINGS_STORAGE_KEY);
+      if (!raw) {
+        return DEFAULT_TTS_SETTINGS;
+      }
+
+      return normalizeTtsSettings(JSON.parse(raw));
+    } catch {
+      return DEFAULT_TTS_SETTINGS;
+    }
+  });
+  const [speechVoices, setSpeechVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voicesLoaded, setVoicesLoaded] = useState(false);
+  const [ttsDiagnostics, setTtsDiagnostics] = useState<TtsDiagnosticsSnapshot>(
+    () => getTtsDiagnosticsSnapshot(),
+  );
+
+  const { toast, showToast, clearToast } = useToastMessage();
+  const ttsRequestCounterRef = useRef(0);
   const {
     decks,
     setDecks,
@@ -188,10 +156,119 @@ export default function ChineseFlashcardApp() {
       .map((card) => flashcardDb.ensureCardFields(card));
   }, [cards, currentDeck]);
 
+  useEffect(() => {
+    if (decks.length === 0) {
+      if (currentDeck) {
+        setCurrentDeck(null);
+      }
+      return;
+    }
+
+    if (!currentDeck) {
+      setCurrentDeck(decks[0]);
+      return;
+    }
+
+    const stillExists = decks.some((deck) => deck.id === currentDeck.id);
+    if (!stillExists) {
+      setCurrentDeck(decks[0]);
+    }
+  }, [currentDeck, decks]);
+
   const learnedCount = useMemo(
     () => cards.filter((card) => card.repetition > 0).length,
     [cards],
   );
+
+  useEffect(() => {
+    let isMounted = true;
+    const synthesis =
+      typeof window !== "undefined" && "speechSynthesis" in window
+        ? window.speechSynthesis
+        : null;
+
+    const loadVoices = async () => {
+      if (isMounted) {
+        setVoicesLoaded(false);
+      }
+      const voices = await loadSpeechVoices();
+      if (!isMounted) return;
+      setSpeechVoices(voices);
+      setVoicesLoaded(true);
+    };
+
+    const handleVoicesChanged = () => {
+      if (!synthesis || !isMounted) return;
+      setSpeechVoices(synthesis.getVoices());
+      setVoicesLoaded(true);
+    };
+
+    void loadVoices();
+    synthesis?.addEventListener("voiceschanged", handleVoicesChanged);
+
+    return () => {
+      isMounted = false;
+      synthesis?.removeEventListener("voiceschanged", handleVoicesChanged);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      TTS_SETTINGS_STORAGE_KEY,
+      JSON.stringify(ttsSettings),
+    );
+  }, [ttsSettings]);
+
+  useEffect(() => subscribeToTtsDiagnostics(setTtsDiagnostics), []);
+
+  const bestChineseVoice = useMemo(
+    () => getBestChineseVoice(speechVoices, ttsSettings.preferredLang),
+    [speechVoices, ttsSettings.preferredLang, ttsDiagnostics],
+  );
+
+  const storedSelectedVoice = useMemo(() => {
+    if (!speechVoices.length) return null;
+
+    if (ttsSettings.voiceURI) {
+      const matched = speechVoices.find(
+        (voice) => voice.voiceURI === ttsSettings.voiceURI,
+      );
+      if (matched) return matched;
+    }
+
+    return null;
+  }, [speechVoices, ttsSettings.voiceURI]);
+
+  const selectedVoice = useMemo(() => {
+    if (
+      storedSelectedVoice &&
+      !isBadVoiceCached(storedSelectedVoice.voiceURI)
+    ) {
+      return storedSelectedVoice;
+    }
+
+    return bestChineseVoice;
+  }, [bestChineseVoice, storedSelectedVoice, ttsDiagnostics]);
+
+  useEffect(() => {
+    if (!ttsSettings.voiceURI || !speechVoices.length) {
+      return;
+    }
+
+    const isStoredVoiceAvailable = speechVoices.some(
+      (voice) => voice.voiceURI === ttsSettings.voiceURI,
+    );
+
+    if (!isStoredVoiceAvailable) {
+      setTtsSettings((prev) => ({ ...prev, voiceURI: "" }));
+    }
+  }, [speechVoices, ttsSettings.voiceURI]);
+
+  const hasDedicatedChineseVoice = Boolean(bestChineseVoice);
 
   const updateDeckCount = useCallback(
     async (deckId: string, nextCount: number) => {
@@ -293,13 +370,13 @@ export default function ChineseFlashcardApp() {
         return;
       }
 
-      setActiveTab("study");
+      setActiveTab("decks");
     },
     [cards, showToast],
   );
 
   const handleRateCard = useCallback(
-    async (cardId: string, _rating: Rating, updates: Partial<CardType>) => {
+    async (cardId: string, rating: Rating, updates: Partial<CardType>) => {
       const card = cards.find((item) => item.id === cardId);
       if (!card) return;
 
@@ -311,6 +388,12 @@ export default function ChineseFlashcardApp() {
 
       try {
         await flashcardDb.updateCard(updatedCard);
+        await flashcardDb.createReviewPerformanceEvent({
+          cardId: card.id,
+          deckId: card.deckId,
+          rating,
+          isSuccess: rating !== "again",
+        });
         setCards((prev) =>
           prev.map((item) => (item.id === cardId ? updatedCard : item)),
         );
@@ -332,314 +415,73 @@ export default function ChineseFlashcardApp() {
     [cards, currentCardIndex, showToast, studyQueue.length, setCards],
   );
 
-  const updateForm = useCallback((patch: Partial<NewCardFormState>) => {
-    setNewCardForm((prev) => ({ ...prev, ...patch }));
-  }, []);
-
-  const resetCardForm = useCallback(() => {
-    setNewCardForm(EMPTY_FORM);
-    setSentenceAnalysis(null);
-  }, []);
-
   const endStudySession = useCallback(() => {
     setStudyQueue([]);
     setCurrentCardIndex(0);
     setActiveTab("decks");
   }, []);
 
-  const buildCardExampleData = useCallback(
-    async ({
-      sentence,
-      examplePinyin,
-      exampleTranslation,
-      cachedAnalysis,
-    }: {
-      sentence: string;
-      examplePinyin?: string;
-      exampleTranslation?: string;
-      cachedAnalysis?: SentenceAnalysis | null;
-    }) => {
-      const trimmedSentence = normalizeExampleSentence(sentence);
-      if (!trimmedSentence) {
-        return {
-          exampleBreakdown: EMPTY_EXAMPLE_BREAKDOWN,
-          usageExamples: undefined,
-        };
+  const handleTabChange = useCallback((value: string) => {
+    const nextTab = value as TabType;
+    setActiveTab(nextTab);
+  }, []);
+
+  const handleRecordQuizResult = useCallback(
+    async (input: QuizPerformanceInput) => {
+      try {
+        await flashcardDb.createQuizPerformanceEvent(input);
+      } catch (error) {
+        console.error("Failed to save quiz performance event:", error);
       }
-
-      const exampleBreakdown =
-        cachedAnalysis &&
-        normalizeExampleSentence(cachedAnalysis.sentence) === trimmedSentence
-          ? toExampleBreakdownFromAnalysis(cachedAnalysis, {
-              pinyin: examplePinyin,
-              translation: exampleTranslation,
-            })
-          : normalizeExampleBreakdown(
-              buildExampleBreakdown(trimmedSentence, await loadCedict(), {
-                pinyinOverride: examplePinyin,
-                translation: exampleTranslation,
-              }),
-              trimmedSentence,
-            );
-
-      return {
-        exampleBreakdown,
-        usageExamples: buildUsageExamples(exampleBreakdown),
-      };
     },
     [],
   );
 
-  const resolveExampleData = useCallback(
-    async ({
-      currentSentence,
-      currentBreakdown,
-      nextSentence,
-      nextBreakdown,
-      examplePinyin,
-      exampleTranslation,
-      cachedAnalysis,
-    }: {
-      currentSentence?: string;
-      currentBreakdown?: CardType["exampleBreakdown"];
-      nextSentence: string;
-      nextBreakdown?: CardType["exampleBreakdown"];
-      examplePinyin?: string;
-      exampleTranslation?: string;
-      cachedAnalysis?: SentenceAnalysis | null;
-    }) => {
-      const normalizedCurrentSentence =
-        normalizeExampleSentence(currentSentence);
-      const normalizedNextSentence = normalizeExampleSentence(nextSentence);
-
-      if (!normalizedNextSentence) {
-        return {
-          example: "",
-          exampleBreakdown: EMPTY_EXAMPLE_BREAKDOWN,
-          usageExamples: undefined,
-        };
+  const handleSaveCard = useCallback(
+    async (previewCard: CardType) => {
+      if (!currentDeck) {
+        showToast("Please select a deck first");
+        return false;
       }
 
-      const exampleChanged =
-        normalizedNextSentence !== normalizedCurrentSentence;
-
-      if (exampleChanged) {
-        const { exampleBreakdown, usageExamples } = await buildCardExampleData({
-          sentence: normalizedNextSentence,
-        });
-
-        return {
-          example: normalizedNextSentence,
-          exampleBreakdown,
-          usageExamples,
-        };
-      }
-
-      const safeBreakdown =
-        nextBreakdown &&
-        normalizeExampleSentence(nextBreakdown.sentence) ===
-          normalizedNextSentence
-          ? normalizeExampleBreakdown(nextBreakdown, normalizedNextSentence)
-          : currentBreakdown &&
-              normalizeExampleSentence(currentBreakdown.sentence) ===
-                normalizedNextSentence
-            ? normalizeExampleBreakdown(
-                currentBreakdown,
-                normalizedNextSentence,
-              )
-            : cachedAnalysis &&
-                normalizeExampleSentence(cachedAnalysis.sentence) ===
-                  normalizedNextSentence
-              ? toExampleBreakdownFromAnalysis(cachedAnalysis, {
-                  pinyin: examplePinyin,
-                  translation: exampleTranslation,
-                })
-              : null;
-
-      if (safeBreakdown) {
-        return {
-          example: normalizedNextSentence,
-          exampleBreakdown: safeBreakdown,
-          usageExamples: buildUsageExamples(safeBreakdown),
-        };
-      }
-
-      const { exampleBreakdown, usageExamples } = await buildCardExampleData({
-        sentence: normalizedNextSentence,
-        examplePinyin,
-        exampleTranslation,
-        cachedAnalysis,
-      });
-
-      return {
-        example: normalizedNextSentence,
-        exampleBreakdown,
-        usageExamples,
-      };
-    },
-    [buildCardExampleData],
-  );
-
-  const handleAutoFetch = useCallback(async () => {
-    const inputText = newCardForm.front.trim();
-    if (!inputText) {
-      showToast("Please enter Chinese text first");
-      return;
-    }
-
-    setIsAutoFetching(true);
-    try {
-      const index = await loadCedict();
-      const results = searchCedict(inputText, index);
-
-      const exactWord = results.words.find((word) => word.word === inputText);
-      const exactCharacter = results.characters.find(
-        (character) => character.char === inputText,
-      );
-
-      const pinyin = exactWord?.pinyin || exactCharacter?.pinyin || "";
-      const meaning = exactWord?.meaning || exactCharacter?.meaning || "";
-
-      if (!pinyin && !meaning) {
-        showToast("No local CEDICT entry found for this input");
-        return;
-      }
-
-      setNewCardForm((prev) => ({
-        ...prev,
-        pinyin: convertPinyinTones(pinyin),
-        meaning,
-      }));
-
-      showToast("Card fields auto-filled from CEDICT");
-    } catch (error) {
-      console.error("Auto-fetch failed:", error);
-      showToast("Could not fetch data");
-    } finally {
-      setIsAutoFetching(false);
-    }
-  }, [newCardForm.front, showToast]);
-
-  const handleAnalyzeSentence = useCallback(async () => {
-    const sentence = newCardForm.example.trim();
-    if (!sentence) {
-      showToast("Please enter an example sentence first");
-      return;
-    }
-
-    setIsAnalyzingSentence(true);
-    try {
-      const index = await loadCedict();
-      const exampleBreakdown = buildExampleBreakdown(sentence, index);
-      const analysis = toSentenceAnalysis(exampleBreakdown);
-
-      setSentenceAnalysis(analysis);
-      setNewCardForm((prev) => ({
-        ...prev,
-        examplePinyin: convertPinyinTones(analysis.pinyin),
-        exampleTranslation: analysis.translation,
-      }));
-      showToast("Sentence analyzed successfully");
-    } catch (error) {
-      console.error("Sentence analysis failed:", error);
-      showToast("Could not analyze sentence");
-    } finally {
-      setIsAnalyzingSentence(false);
-    }
-  }, [newCardForm.example, showToast]);
-
-  const handleCreateCard = useCallback(async () => {
-    if (!currentDeck) {
-      showToast("Please select a deck first");
-      return;
-    }
-
-    const front = newCardForm.front.trim();
-    const meaning = newCardForm.meaning.trim();
-    const exampleSentence = normalizeExampleSentence(newCardForm.example);
-
-    const duplicateWord = cards.some(
-      (card) =>
-        card.deckId === currentDeck.id &&
-        card.front.trim().toLowerCase() === front.toLowerCase(),
-    );
-
-    if (duplicateWord) {
-      showToast("This Chinese word already exists in the selected deck");
-      return;
-    }
-
-    if (exampleSentence) {
-      const duplicateSentence = cards.some(
+      const duplicateWord = cards.some(
         (card) =>
           card.deckId === currentDeck.id &&
-          normalizeExampleSentence(card.example).toLowerCase() ===
-            exampleSentence.toLowerCase(),
+          normalizeWordKey(card.front) === normalizeWordKey(previewCard.front),
       );
 
-      if (duplicateSentence) {
-        showToast("This Chinese sentence already exists in the selected deck");
-        return;
+      if (duplicateWord) {
+        showToast("This Chinese word already exists in the selected deck");
+        return false;
       }
-    }
 
-    if (!front) {
-      showToast("Please enter Chinese text for card front");
-      return;
-    }
+      try {
+        const srsInit = initializeNewCard();
+        const cardToSave = flashcardDb.ensureCardFields({
+          ...previewCard,
+          id: generateId(),
+          deckId: currentDeck.id,
+          ...srsInit,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
 
-    if (!meaning) {
-      showToast("Please add a meaning before saving");
-      return;
-    }
-
-    try {
-      const srsInit = initializeNewCard();
-      const { exampleBreakdown, usageExamples } = await resolveExampleData({
-        nextSentence: exampleSentence,
-        examplePinyin: newCardForm.examplePinyin,
-        exampleTranslation: newCardForm.exampleTranslation,
-        cachedAnalysis: sentenceAnalysis,
-      });
-
-      const newCard: CardType = flashcardDb.ensureCardFields({
-        id: generateId(),
-        deckId: currentDeck.id,
-        front,
-        pinyin: newCardForm.pinyin.trim(),
-        meaning,
-        example: exampleSentence,
-        exampleBreakdown,
-        ...(usageExamples ? { usageExamples } : {}),
-        ...srsInit,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-
-      await flashcardDb.createCard(newCard);
-      setCards((prev) => [...prev, newCard]);
-      await updateDeckCount(
-        currentDeck.id,
-        (deckStatsMap[currentDeck.id]?.total || 0) + 1,
-      );
-
-      resetCardForm();
-      showToast("Card created successfully");
-    } catch (error) {
-      console.error("Failed to create card:", error);
-      showToast("Failed to create card");
-    }
-  }, [
-    currentDeck,
-    deckStatsMap,
-    newCardForm,
-    resetCardForm,
-    resolveExampleData,
-    sentenceAnalysis,
-    setCards,
-    showToast,
-    updateDeckCount,
-  ]);
+        await flashcardDb.createCard(cardToSave);
+        setCards((prev) => [...prev, cardToSave]);
+        await updateDeckCount(
+          currentDeck.id,
+          (deckStatsMap[currentDeck.id]?.total || 0) + 1,
+        );
+        showToast("Card created successfully");
+        return true;
+      } catch (error) {
+        console.error("Failed to create card:", error);
+        showToast("Failed to create card");
+        return false;
+      }
+    },
+    [cards, currentDeck, deckStatsMap, setCards, showToast, updateDeckCount],
+  );
 
   const handleDeleteCard = useCallback(
     async (cardId: string) => {
@@ -661,59 +503,6 @@ export default function ChineseFlashcardApp() {
     },
     [cards, deckStatsMap, setCards, showToast, updateDeckCount],
   );
-
-  const handleEditCard = useCallback(
-    async (cardId: string, patch: Partial<CardType>) => {
-      const card = cards.find((item) => item.id === cardId);
-      if (!card) return;
-
-      try {
-        const { example, exampleBreakdown, usageExamples } =
-          await resolveExampleData({
-            currentSentence: card.example,
-            currentBreakdown: card.exampleBreakdown,
-            nextSentence: patch.example ?? card.example,
-            nextBreakdown: patch.exampleBreakdown,
-          });
-
-        const updatedCard = flashcardDb.ensureCardFields({
-          ...card,
-          ...patch,
-          example,
-          exampleBreakdown,
-          ...(usageExamples ? { usageExamples } : { usageExamples: undefined }),
-          updatedAt: Date.now(),
-        });
-
-        await flashcardDb.updateCard(updatedCard);
-        setCards((prev) =>
-          prev.map((item) => (item.id === cardId ? updatedCard : item)),
-        );
-        showToast("Card updated");
-      } catch (error) {
-        console.error("Failed to update card:", error);
-        showToast("Failed to update card");
-      }
-    },
-    [cards, resolveExampleData, setCards, showToast],
-  );
-
-  const handleSearch = useCallback(async () => {
-    const query = searchQuery.trim();
-    if (!query) return;
-
-    setIsSearching(true);
-    try {
-      const index = await loadCedict();
-      const results = searchCedict(query, index);
-      setSearchResults(results);
-    } catch (error) {
-      console.error("Search failed:", error);
-      showToast("Search failed");
-    } finally {
-      setIsSearching(false);
-    }
-  }, [searchQuery, showToast]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -747,11 +536,14 @@ export default function ChineseFlashcardApp() {
         setCurrentDeck(null);
         setStudyQueue([]);
         setCurrentCardIndex(0);
-        setSentenceAnalysis(null);
         showToast("Import successful");
       } catch (error) {
         console.error("Import failed:", error);
-        showToast("Import failed: malformed data");
+        showToast(
+          error instanceof Error
+            ? error.message
+            : "Import failed: malformed data",
+        );
       } finally {
         event.target.value = "";
       }
@@ -759,94 +551,142 @@ export default function ChineseFlashcardApp() {
     [loadData, showToast],
   );
 
-  const speakChinese = useCallback((text: string) => {
-    if (!("speechSynthesis" in window)) return;
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "zh-CN";
-    utterance.rate = 0.8;
-    window.speechSynthesis.speak(utterance);
+  const updateTtsSettings = useCallback((patch: Partial<TtsSettings>) => {
+    setTtsSettings((prev) => normalizeTtsSettings({ ...prev, ...patch }));
   }, []);
+
+  const speakChinese = useCallback(
+    (text: string, extraOptions?: Partial<SpeakTextOptions>) => {
+      const trimmedText = text.trim();
+      if (!trimmedText) {
+        return;
+      }
+
+      const baseRate = ttsSettings.studyMode
+        ? Math.max(0.55, ttsSettings.rate - 0.15)
+        : ttsSettings.rate;
+      const requestedVoiceURI =
+        selectedVoice?.voiceURI ||
+        (ttsSettings.voiceURI && !isBadVoiceCached(ttsSettings.voiceURI)
+          ? ttsSettings.voiceURI
+          : undefined);
+
+      const options: SpeakTextOptions = {
+        lang: ttsSettings.preferredLang,
+        preferredLang: ttsSettings.preferredLang,
+        voiceURI: requestedVoiceURI,
+        rate: baseRate,
+        pitch: ttsSettings.pitch,
+        volume: ttsSettings.volume,
+        debugSource: extraOptions?.debugSource || "app",
+        ...extraOptions,
+      };
+
+      void (async () => {
+        clearToast();
+        const requestId = ttsRequestCounterRef.current + 1;
+        ttsRequestCounterRef.current = requestId;
+
+        const success = await speakText(trimmedText, options);
+
+        if (requestId !== ttsRequestCounterRef.current) {
+          return;
+        }
+
+        if (!success) {
+          const diagnostics = getTtsDiagnosticsSnapshot();
+          showToast(
+            diagnostics.cleanStatusMessage ||
+              "Chinese TTS is unavailable in this browser/voice configuration. Chrome currently works better for this feature.",
+          );
+        }
+      })();
+    },
+    [clearToast, selectedVoice?.voiceURI, showToast, ttsSettings],
+  );
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen pb-16">
-      <header className="sticky top-0 z-40 bg-gradient-to-b from-[#0a0a0c] to-transparent backdrop-blur-sm">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-            中文闪卡 Chinese Flashcards
+    <div className="relative h-screen overflow-hidden pb-16">
+      <header className="fixed inset-x-0 top-0 z-40 bg-gradient-to-b from-[#040405] via-[#040405]/96 to-transparent backdrop-blur-sm">
+        <div className="mx-auto max-w-5xl px-4 py-5">
+          <h1 className="bg-gradient-to-r from-slate-100 via-cyan-200 to-cyan-400 bg-clip-text text-center text-2xl font-bold text-transparent">
+            NeonLang
           </h1>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 pb-4">
+      <main className="app-scroll-pane mx-auto h-full max-w-5xl overflow-y-auto overscroll-contain px-4 pb-4 pt-28">
         <Tabs
           value={activeTab}
-          onValueChange={(value) => setActiveTab(value as TabType)}
+          onValueChange={handleTabChange}
         >
-          <TabsList className="mx-auto mb-6 grid w-full max-w-2xl grid-cols-5 rounded-xl bg-slate-800/50 p-1">
+          <TabsList className="mx-auto mb-8 grid h-[60px] w-full max-w-2xl grid-cols-4 gap-2 rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(10,11,13,0.94),rgba(5,6,8,0.98))] p-2 shadow-[0_16px_40px_rgba(0,0,0,0.28)]">
             <TabsTrigger
               value="decks"
-              className="flex items-center gap-1 text-xs md:text-sm"
+               className="flex h-full items-center gap-1 rounded-[16px] px-3 text-xs text-slate-400 data-[state=active]:bg-black/88 data-[state=active]:text-cyan-100 md:text-sm"
             >
-              <FolderOpen className="w-4 h-4" />
+              <FolderOpen className="h-4 w-4" />
               <span className="hidden sm:inline">Decks</span>
             </TabsTrigger>
             <TabsTrigger
-              value="study"
-              className="flex items-center gap-1 text-xs md:text-sm"
+              value="statistics"
+               className="flex h-full items-center gap-1 rounded-[16px] px-3 text-xs text-slate-400 data-[state=active]:bg-black/88 data-[state=active]:text-cyan-100 md:text-sm"
             >
-              <GraduationCap className="w-4 h-4" />
-              <span className="hidden sm:inline">Study</span>
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Statistics</span>
             </TabsTrigger>
             <TabsTrigger
               value="add"
-              className="flex items-center gap-1 text-xs md:text-sm"
+               className="flex h-full items-center gap-1 rounded-[16px] px-3 text-xs text-slate-400 data-[state=active]:bg-black/88 data-[state=active]:text-cyan-100 md:text-sm"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Add</span>
             </TabsTrigger>
             <TabsTrigger
-              value="search"
-              className="flex items-center gap-1 text-xs md:text-sm"
-            >
-              <Search className="w-4 h-4" />
-              <span className="hidden sm:inline">Search</span>
-            </TabsTrigger>
-            <TabsTrigger
               value="settings"
-              className="flex items-center gap-1 text-xs md:text-sm"
+               className="flex h-full items-center gap-1 rounded-[16px] px-3 text-xs text-slate-400 data-[state=active]:bg-black/88 data-[state=active]:text-cyan-100 md:text-sm"
             >
-              <Settings className="w-4 h-4" />
+              <Settings className="h-4 w-4" />
               <span className="hidden sm:inline">Settings</span>
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="decks">
-            <DecksView
-              decks={decks}
-              deckStatsMap={deckStatsMap}
-              onCreateDeck={handleCreateDeck}
-              onDeleteDeck={handleDeleteDeck}
-              onStudyDeck={startStudySession}
-              onSelectDeckForCards={handleSelectDeck}
-            />
+            {studyQueue.length > 0 ? (
+              <StudyView
+                studyQueue={studyQueue}
+                currentCardIndex={currentCardIndex}
+                onEndSession={endStudySession}
+                onRateCard={handleRateCard}
+                onRecordQuizResult={handleRecordQuizResult}
+                onSpeakChinese={speakChinese}
+                hasDedicatedChineseVoice={hasDedicatedChineseVoice}
+              />
+            ) : (
+              <DecksView
+                decks={decks}
+                deckStatsMap={deckStatsMap}
+                onCreateDeck={handleCreateDeck}
+                onDeleteDeck={handleDeleteDeck}
+                onStudyDeck={startStudySession}
+                onSelectDeckForCards={handleSelectDeck}
+              />
+            )}
           </TabsContent>
 
-          <TabsContent value="study">
-            <StudyView
-              studyQueue={studyQueue}
-              currentCardIndex={currentCardIndex}
-              onEndSession={endStudySession}
-              onRateCard={handleRateCard}
-              onSpeakChinese={speakChinese}
+          <TabsContent value="statistics">
+            <StatisticsView
+              decks={decks}
+              cards={cards}
+              deckStatsMap={deckStatsMap}
             />
           </TabsContent>
 
@@ -854,11 +694,8 @@ export default function ChineseFlashcardApp() {
             <AddCardView
               decks={decks}
               currentDeck={currentDeck}
+              allCards={cards}
               cardsInDeck={cardsInCurrentDeck}
-              formState={newCardForm}
-              sentenceAnalysis={sentenceAnalysis}
-              isAutoFetching={isAutoFetching}
-              isAnalyzingSentence={isAnalyzingSentence}
               onGoDecks={() => setActiveTab("decks")}
               onSelectDeck={(deckId) => {
                 const selectedDeck = decks.find((deck) => deck.id === deckId);
@@ -866,24 +703,10 @@ export default function ChineseFlashcardApp() {
                   setCurrentDeck(selectedDeck);
                 }
               }}
-              onFormChange={updateForm}
-              onAutoFetch={handleAutoFetch}
-              onAnalyzeSentence={handleAnalyzeSentence}
-              onCreateCard={handleCreateCard}
-              onClearForm={resetCardForm}
+              onSaveCard={handleSaveCard}
               onDeleteCard={handleDeleteCard}
-              onEditCard={handleEditCard}
-            />
-          </TabsContent>
-
-          <TabsContent value="search">
-            <SearchView
-              query={searchQuery}
-              isSearching={isSearching}
-              results={searchResults}
-              onQueryChange={setSearchQuery}
-              onSearch={handleSearch}
-              onSpeak={speakChinese}
+              onSpeakChinese={speakChinese}
+              hasDedicatedChineseVoice={hasDedicatedChineseVoice}
             />
           </TabsContent>
 
@@ -894,13 +717,36 @@ export default function ChineseFlashcardApp() {
               learnedCount={learnedCount}
               onExport={handleExport}
               onImport={handleImport}
+              voices={speechVoices}
+              selectedVoiceURI={
+                ttsSettings.voiceURI || selectedVoice?.voiceURI || ""
+              }
+              selectedVoiceLabel={
+                storedSelectedVoice
+                  ? `${storedSelectedVoice.name} (${storedSelectedVoice.lang})`
+                  : selectedVoice
+                    ? `${selectedVoice.name} (${selectedVoice.lang})`
+                    : "Default browser voice"
+              }
+              selectedVoiceFailed={isBadVoiceCached(ttsSettings.voiceURI)}
+              ttsDiagnostics={ttsDiagnostics}
+              playbackRate={ttsSettings.rate}
+              pitch={ttsSettings.pitch}
+              volume={ttsSettings.volume}
+              studyMode={ttsSettings.studyMode}
+              preferredLang={ttsSettings.preferredLang}
+              voicesLoaded={voicesLoaded}
+              hasDedicatedChineseVoice={hasDedicatedChineseVoice}
+              onTtsSettingChange={updateTtsSettings}
+              onSpeakTest={speakChinese}
+              onClearBadVoiceCache={clearBadVoiceCache}
             />
           </TabsContent>
         </Tabs>
       </main>
 
       {toast && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-slate-800/95 border border-white/10 px-4 py-2 rounded-full shadow-lg animate-fadeIn">
+        <div className="app-panel-soft fixed bottom-4 left-1/2 z-50 -translate-x-1/2 animate-fadeIn rounded-full px-4 py-2">
           {toast}
         </div>
       )}

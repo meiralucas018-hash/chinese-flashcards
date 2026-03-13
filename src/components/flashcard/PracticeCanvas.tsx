@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useRef, useLayoutEffect, useCallback, useState } from "react";
-import { Button } from "@/components/ui/button";
+import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { RotateCcw, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Point {
   x: number;
@@ -16,191 +16,142 @@ interface PracticeCanvasProps {
   showGrid?: boolean;
   showTemplate?: boolean;
   onInteraction?: () => void;
+  extraControls?: React.ReactNode;
 }
 
-/**
- * Chaikin's curve smoothing algorithm
- * Subdivides the curve by cutting corners
- */
-function chaikinSmooth(points: Point[], passes: number = 3): Point[] {
-  if (points.length < 2) return points;
+const MIN_POINT_DISTANCE_SQUARED = 1.2;
+const MAX_SEGMENT_LENGTH = 3.5;
+const POINTER_SMOOTHING_FACTOR = 0.42;
 
-  let result = [...points];
+function getStrokeWidth(size: number): number {
+  return Math.max(12, Math.round(size * 0.07));
+}
+
+function interpolateSegmentPoints(
+  from: Point,
+  to: Point,
+  maxSegmentLength = MAX_SEGMENT_LENGTH,
+): Point[] {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const distance = Math.hypot(dx, dy);
+
+  if (distance <= maxSegmentLength) {
+    return [to];
+  }
+
+  const steps = Math.ceil(distance / maxSegmentLength);
+  const points: Point[] = [];
+
+  for (let step = 1; step <= steps; step++) {
+    const t = step / steps;
+    points.push({
+      x: from.x + dx * t,
+      y: from.y + dy * t,
+    });
+  }
+
+  return points;
+}
+
+function chaikinSmooth(points: Point[], passes = 2): Point[] {
+  if (points.length < 3) {
+    return points;
+  }
+
+  let result = points;
 
   for (let pass = 0; pass < passes; pass++) {
-    const newPoints: Point[] = [result[0]];
+    const next: Point[] = [result[0]];
 
-    for (let i = 0; i < result.length - 1; i++) {
-      const a = result[i];
-      const b = result[i + 1];
-      newPoints.push({
-        x: 0.75 * a.x + 0.25 * b.x,
-        y: 0.75 * a.y + 0.25 * b.y,
+    for (let index = 0; index < result.length - 1; index++) {
+      const current = result[index];
+      const following = result[index + 1];
+
+      next.push({
+        x: current.x * 0.75 + following.x * 0.25,
+        y: current.y * 0.75 + following.y * 0.25,
       });
-      newPoints.push({
-        x: 0.25 * a.x + 0.75 * b.x,
-        y: 0.25 * a.y + 0.75 * b.y,
+      next.push({
+        x: current.x * 0.25 + following.x * 0.75,
+        y: current.y * 0.25 + following.y * 0.75,
       });
     }
 
-    newPoints.push(result[result.length - 1]);
-    result = newPoints;
+    next.push(result[result.length - 1]);
+    result = next;
   }
 
   return result;
 }
 
-/**
- * Calculate Catmull-Rom spline segment as a cubic Bezier
- */
-function catmullRomSegment(
-  p0: Point,
-  p1: Point,
-  p2: Point,
-  p3: Point,
+function drawStroke(
   ctx: CanvasRenderingContext2D,
+  points: Point[],
+  size: number,
+  options?: {
+    strokeStyle?: string;
+    shadowColor?: string;
+    shadowBlur?: number;
+    opacity?: number;
+  },
 ): void {
-  const cp1x = p1.x + (p2.x - p0.x) / 3;
-  const cp1y = p1.y + (p2.y - p0.y) / 3;
-  const cp2x = p2.x - (p3.x - p1.x) / 3;
-  const cp2y = p2.y - (p3.y - p1.y) / 3;
-  ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
-}
+  if (points.length === 0) {
+    return;
+  }
 
-/**
- * Draw a smooth curve using Catmull-Rom splines
- */
-function drawCatmullRom(points: Point[], ctx: CanvasRenderingContext2D): void {
-  if (points.length < 2) return;
+  const smoothedPoints = chaikinSmooth(points);
+  const strokeWidth = getStrokeWidth(size);
+  const strokeColor = options?.strokeStyle ?? "#f8fafc";
+  const opacity = options?.opacity ?? 1;
 
-  // Create ghost points for endpoints
-  const g0: Point = {
-    x: 2 * points[0].x - points[1].x,
-    y: 2 * points[0].y - points[1].y,
-  };
-  const gN: Point = {
-    x: 2 * points[points.length - 1].x - points[points.length - 2].x,
-    y: 2 * points[points.length - 1].y - points[points.length - 2].y,
-  };
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = strokeWidth;
+  ctx.strokeStyle = strokeColor;
+  ctx.globalAlpha = opacity;
+  ctx.shadowColor = options?.shadowColor ?? "rgba(125, 211, 252, 0.22)";
+  ctx.shadowBlur = options?.shadowBlur ?? Math.round(strokeWidth * 0.8);
 
-  const allPoints = [g0, ...points, gN];
+  if (smoothedPoints.length === 1) {
+    ctx.beginPath();
+    ctx.arc(
+      smoothedPoints[0].x,
+      smoothedPoints[0].y,
+      strokeWidth * 0.42,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = strokeColor;
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
 
   ctx.beginPath();
-  ctx.moveTo(allPoints[1].x, allPoints[1].y);
+  ctx.moveTo(smoothedPoints[0].x, smoothedPoints[0].y);
 
-  if (allPoints.length <= 3) {
-    ctx.lineTo(
-      allPoints[allPoints.length - 2].x,
-      allPoints[allPoints.length - 2].y,
-    );
-  } else {
-    for (let i = 1; i < allPoints.length - 2; i++) {
-      catmullRomSegment(
-        allPoints[i - 1],
-        allPoints[i],
-        allPoints[i + 1],
-        allPoints[i + 2],
-        ctx,
-      );
-    }
+  for (let index = 1; index < smoothedPoints.length - 1; index++) {
+    const current = smoothedPoints[index];
+    const next = smoothedPoints[index + 1];
+    const midpoint = {
+      x: (current.x + next.x) / 2,
+      y: (current.y + next.y) / 2,
+    };
+    ctx.quadraticCurveTo(current.x, current.y, midpoint.x, midpoint.y);
   }
 
+  const penultimatePoint = smoothedPoints[smoothedPoints.length - 2];
+  const lastPoint = smoothedPoints[smoothedPoints.length - 1];
+  ctx.quadraticCurveTo(
+    penultimatePoint.x,
+    penultimatePoint.y,
+    lastPoint.x,
+    lastPoint.y,
+  );
   ctx.stroke();
-}
-
-/**
- * Check if a stroke is nearly straight
- * Returns true if max deviation from chord is within threshold
- */
-function isNearlyStraight(points: Point[], threshold: number = 0.1): boolean {
-  if (points.length < 3) return true;
-
-  const p0 = points[0];
-  const pN = points[points.length - 1];
-
-  // Calculate chord length
-  const chordDx = pN.x - p0.x;
-  const chordDy = pN.y - p0.y;
-  const chordLen = Math.sqrt(chordDx * chordDx + chordDy * chordDy);
-
-  if (chordLen < 1) return true;
-
-  // Calculate max deviation from the chord
-  let maxDev = 0;
-  for (let i = 1; i < points.length - 1; i++) {
-    const ex = points[i].x - p0.x;
-    const ey = points[i].y - p0.y;
-    // Distance from point to line (chord)
-    const dev = Math.abs(ex * chordDy - ey * chordDx) / chordLen;
-    maxDev = Math.max(maxDev, dev);
-  }
-
-  return maxDev / chordLen < threshold;
-}
-
-/**
- * Fit a quadratic Bezier curve using least-squares
- */
-function fitQuadraticBezier(points: Point[]): {
-  p0: Point;
-  p1: Point;
-  p2: Point;
-} {
-  const p0 = points[0];
-  const p2 = points[points.length - 1];
-
-  if (points.length < 3) {
-    return {
-      p0,
-      p1: { x: (p0.x + p2.x) / 2, y: (p0.y + p2.y) / 2 },
-      p2,
-    };
-  }
-
-  // Calculate arc-length parameterization
-  const arcLen: number[] = [0];
-  for (let i = 1; i < points.length; i++) {
-    const dx = points[i].x - points[i - 1].x;
-    const dy = points[i].y - points[i - 1].y;
-    arcLen.push(arcLen[i - 1] + Math.sqrt(dx * dx + dy * dy));
-  }
-  const totalLen = arcLen[arcLen.length - 1];
-
-  if (totalLen < 2) {
-    return {
-      p0,
-      p1: { x: (p0.x + p2.x) / 2, y: (p0.y + p2.y) / 2 },
-      p2,
-    };
-  }
-
-  // Least-squares fit for control point
-  let sumW2x = 0;
-  let sumW2y = 0;
-  let sumW2 = 0;
-
-  for (let i = 1; i < points.length - 1; i++) {
-    const t = arcLen[i] / totalLen;
-    const w = 2 * t * (1 - t);
-
-    if (w < 1e-4) continue;
-
-    const rx = points[i].x - (1 - t) * (1 - t) * p0.x - t * t * p2.x;
-    const ry = points[i].y - (1 - t) * (1 - t) * p0.y - t * t * p2.y;
-
-    sumW2x += w * rx;
-    sumW2y += w * ry;
-    sumW2 += w * w;
-  }
-
-  let p1: Point;
-  if (sumW2 < 1e-6) {
-    p1 = { x: (p0.x + p2.x) / 2, y: (p0.y + p2.y) / 2 };
-  } else {
-    p1 = { x: sumW2x / sumW2, y: sumW2y / sumW2 };
-  }
-
-  return { p0, p1, p2 };
+  ctx.restore();
 }
 
 export default function PracticeCanvas({
@@ -208,341 +159,329 @@ export default function PracticeCanvas({
   width = 280,
   height = 280,
   showGrid = true,
-  showTemplate = false,
+  showTemplate: _showTemplate = false,
   onInteraction,
+  extraControls,
 }: PracticeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasShellRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [strokeCount, setStrokeCount] = useState(0);
+  const [shellWidth, setShellWidth] = useState(width);
   const rawPointsRef = useRef<Point[]>([]);
   const undoStackRef = useRef<ImageData[]>([]);
-  const lastCharRef = useRef<string | null>(null);
   const activePointerIdRef = useRef<number | null>(null);
+  const smoothedPointRef = useRef<Point | null>(null);
+  const hasExtraControls = Boolean(extraControls);
+  const resolvedWidth = Math.min(width, shellWidth || width);
+  const resolvedHeight = Math.round((resolvedWidth / width) * height);
 
-  // Get coordinates from mouse or touch event
+  const setupCanvasResolution = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+
+    const dpr =
+      typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
+    const backingWidth = Math.max(1, Math.round(resolvedWidth * dpr));
+    const backingHeight = Math.max(1, Math.round(resolvedHeight * dpr));
+
+    if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
+      canvas.width = backingWidth;
+      canvas.height = backingHeight;
+    }
+
+    canvas.style.width = `${resolvedWidth}px`;
+    canvas.style.height = `${resolvedHeight}px`;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    return ctx;
+  }, [resolvedHeight, resolvedWidth]);
+
   const getCoords = useCallback(
-    (
-      e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent,
-    ): Point => {
+    (event: React.PointerEvent<HTMLCanvasElement>): Point => {
       const canvas = canvasRef.current;
-      if (!canvas) return { x: 0, y: 0 };
+      if (!canvas) {
+        return { x: 0, y: 0 };
+      }
 
       const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-
-      const src =
-        "touches" in e && e.touches && e.touches.length > 0
-          ? e.touches[0]
-          : "clientX" in e
-            ? e
-            : null;
-      if (!src) return { x: 0, y: 0 };
-
       return {
-        x: (src.clientX - rect.left) * scaleX,
-        y: (src.clientY - rect.top) * scaleY,
+        x: ((event.clientX - rect.left) / rect.width) * resolvedWidth,
+        y: ((event.clientY - rect.top) / rect.height) * resolvedHeight,
       };
     },
-    [],
+    [resolvedHeight, resolvedWidth],
   );
 
-  // Apply stroke style
-  const applyStyle = useCallback((ctx: CanvasRenderingContext2D) => {
-    ctx.lineWidth = 5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = "#f1f5f9";
-    ctx.shadowColor = "rgba(96, 165, 250, 0.4)";
-    ctx.shadowBlur = 6;
-  }, []);
-
-  // Draw the faint template character
-  const drawTemplate = useCallback(
-    (ctx: CanvasRenderingContext2D) => {
-      if (!showTemplate || !character) return;
-
-      ctx.save();
-      ctx.font = `${width * 0.7}px "KaiTi", "楷体", "STKaiti", "华文楷体", "Kai", "Noto Serif SC", serif`;
-      ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(character, width / 2, height / 2);
-      ctx.restore();
-    },
-    [character, width, height, showTemplate],
-  );
-
-  // Initialize canvas when character changes
-  const initCanvas = useCallback(
-    (resetStrokeCount: boolean) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      // Clear and draw template
-      ctx.clearRect(0, 0, width, height);
-      drawTemplate(ctx);
-
-      // Save initial state
-      undoStackRef.current = [ctx.getImageData(0, 0, width, height)];
-      rawPointsRef.current = [];
-      lastCharRef.current = character;
-
-      if (resetStrokeCount) {
-        setStrokeCount(0);
-      }
-    },
-    [character, width, height, drawTemplate],
-  );
-
-  // Initialize canvas on mount and when character changes
-  useLayoutEffect(() => {
-    if (lastCharRef.current !== character) {
-      // Use requestAnimationFrame to defer setState outside of the effect
-      const rafId = requestAnimationFrame(() => {
-        initCanvas(true);
-      });
-      return () => cancelAnimationFrame(rafId);
-    }
-  }, [character, initCanvas]);
-
-  // Draw live preview during stroke
-  const drawLivePreview = useCallback(
-    (ctx: CanvasRenderingContext2D, points: Point[]) => {
-      if (points.length < 2) return;
-
-      const smoothed = chaikinSmooth(points, 3);
-      applyStyle(ctx);
-      drawCatmullRom(smoothed, ctx);
-    },
-    [applyStyle],
-  );
-
-  // Beautify and draw the final stroke
-  const beautifyAndDraw = useCallback(
-    (ctx: CanvasRenderingContext2D, points: Point[]) => {
-      if (points.length < 2) return;
-
-      const p0 = points[0];
-      const pN = points[points.length - 1];
-
-      // Calculate total arc length
-      let totalLen = 0;
-      for (let i = 1; i < points.length; i++) {
-        const dx = points[i].x - points[i - 1].x;
-        const dy = points[i].y - points[i - 1].y;
-        totalLen += Math.sqrt(dx * dx + dy * dy);
-      }
-
-      // Draw a dot for very short strokes
-      if (totalLen < 2) {
-        ctx.beginPath();
-        ctx.arc(p0.x, p0.y, 3, 0, Math.PI * 2);
-        ctx.fillStyle = "#f1f5f9";
-        ctx.fill();
-        return;
-      }
-
-      applyStyle(ctx);
-
-      // Check if nearly straight
-      if (isNearlyStraight(points, 0.1)) {
-        ctx.beginPath();
-        ctx.moveTo(p0.x, p0.y);
-        ctx.lineTo(pN.x, pN.y);
-        ctx.stroke();
-      } else {
-        // Fit and draw quadratic Bezier
-        const { p0: start, p1, p2: end } = fitQuadraticBezier(points);
-        ctx.beginPath();
-        ctx.moveTo(start.x, start.y);
-        ctx.quadraticCurveTo(p1.x, p1.y, end.x, end.y);
-        ctx.stroke();
-      }
-    },
-    [applyStyle],
-  );
-
-  // Save snapshot for undo
-  const saveSnapshot = useCallback((): ImageData | null => {
+  const snapshotCanvas = useCallback((): ImageData | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
-    return ctx.getImageData(0, 0, width, height);
-  }, [width, height]);
 
-  // Restore snapshot
+    return ctx.getImageData(0, 0, canvas.width, canvas.height);
+  }, []);
+
   const restoreSnapshot = useCallback((snapshot: ImageData) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
     ctx.putImageData(snapshot, 0, 0);
   }, []);
 
-  // Start drawing
-  const handleStart = useCallback(
-    (e: React.MouseEvent | React.TouchEvent | React.PointerEvent) => {
-      e.preventDefault();
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
+  const redrawFromLatestSnapshot = useCallback(
+    (previewPoints: Point[] = []) => {
+      const ctx = setupCanvasResolution();
       if (!ctx) return;
 
-      setIsDrawing(true);
-      rawPointsRef.current = [getCoords(e)];
-      onInteraction?.();
-    },
-    [getCoords, onInteraction],
-  );
+      const latestSnapshot = undoStackRef.current[undoStackRef.current.length - 1];
+      if (latestSnapshot) {
+        restoreSnapshot(latestSnapshot);
+      } else {
+        ctx.clearRect(0, 0, resolvedWidth, resolvedHeight);
+      }
 
-  // Continue drawing
-  const handleMove = useCallback(
-    (e: React.MouseEvent | React.TouchEvent | React.PointerEvent) => {
-      if (!isDrawing) return;
-      e.preventDefault();
-
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      const lastPoint = rawPointsRef.current[rawPointsRef.current.length - 1];
-      const newPoint = getCoords(e);
-
-      // Distance gate - ignore tiny movements
-      const dx = newPoint.x - lastPoint.x;
-      const dy = newPoint.y - lastPoint.y;
-      if (dx * dx + dy * dy < 4) return;
-
-      rawPointsRef.current.push(newPoint);
-
-      // Live preview
-      if (undoStackRef.current.length > 0) {
-        restoreSnapshot(undoStackRef.current[undoStackRef.current.length - 1]);
-        applyStyle(ctx);
-        drawLivePreview(ctx, rawPointsRef.current);
+      if (previewPoints.length > 0) {
+        drawStroke(
+          ctx,
+          previewPoints,
+          Math.min(resolvedWidth, resolvedHeight),
+          {
+            strokeStyle: "#f8fafc",
+            shadowColor: "rgba(96, 165, 250, 0.24)",
+            shadowBlur: Math.round(
+              getStrokeWidth(Math.min(resolvedWidth, resolvedHeight)) * 0.75,
+            ),
+            opacity: 1,
+          },
+        );
       }
     },
-    [isDrawing, getCoords, restoreSnapshot, applyStyle, drawLivePreview],
+    [
+      resolvedHeight,
+      resolvedWidth,
+      restoreSnapshot,
+      setupCanvasResolution,
+    ],
   );
 
-  // End drawing
-  const handleEnd = useCallback(() => {
-    if (!isDrawing) return;
-    setIsDrawing(false);
+  const resetCanvas = useCallback(
+    (resetStrokeCount: boolean) => {
+      const ctx = setupCanvasResolution();
+      if (!ctx) return;
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+      ctx.clearRect(0, 0, resolvedWidth, resolvedHeight);
+      const snapshot = snapshotCanvas();
+      undoStackRef.current = snapshot ? [snapshot] : [];
+      rawPointsRef.current = [];
+      smoothedPointRef.current = null;
 
-    // Replace preview with beautified stroke
-    if (undoStackRef.current.length > 0) {
-      restoreSnapshot(undoStackRef.current[undoStackRef.current.length - 1]);
-      beautifyAndDraw(ctx, rawPointsRef.current);
+      if (resetStrokeCount) {
+        setStrokeCount(0);
+      }
+    },
+    [resolvedHeight, resolvedWidth, setupCanvasResolution, snapshotCanvas],
+  );
+
+  useLayoutEffect(() => {
+    const rafId = requestAnimationFrame(() => {
+      resetCanvas(true);
+    });
+
+    return () => cancelAnimationFrame(rafId);
+  }, [character, resetCanvas]);
+
+  useLayoutEffect(() => {
+    const shell = canvasShellRef.current;
+    if (!shell) {
+      return;
     }
 
-    // Save for undo
-    const snapshot = saveSnapshot();
-    if (snapshot) {
-      undoStackRef.current.push(snapshot);
-      setStrokeCount((prev) => prev + 1);
+    const updateWidth = () => {
+      const nextWidth = Math.max(1, Math.floor(shell.clientWidth));
+      setShellWidth((previous) => (previous === nextWidth ? previous : nextWidth));
+    };
+
+    updateWidth();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => updateWidth());
+    observer.observe(shell);
+    return () => observer.disconnect();
+  }, [width]);
+
+  const handleStart = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      event.preventDefault();
+
+      const startPoint = getCoords(event);
+      setIsDrawing(true);
+      rawPointsRef.current = [startPoint];
+      smoothedPointRef.current = startPoint;
+      redrawFromLatestSnapshot([startPoint]);
+      onInteraction?.();
+    },
+    [getCoords, onInteraction, redrawFromLatestSnapshot],
+  );
+
+  const handleMove = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      if (!isDrawing) return;
+      event.preventDefault();
+
+      const lastPoint = rawPointsRef.current[rawPointsRef.current.length - 1];
+      const inputPoint = getCoords(event);
+      const previousSmoothedPoint = smoothedPointRef.current ?? lastPoint;
+      const smoothedPoint = {
+        x:
+          previousSmoothedPoint.x +
+          (inputPoint.x - previousSmoothedPoint.x) * POINTER_SMOOTHING_FACTOR,
+        y:
+          previousSmoothedPoint.y +
+          (inputPoint.y - previousSmoothedPoint.y) * POINTER_SMOOTHING_FACTOR,
+      };
+
+      const dx = smoothedPoint.x - lastPoint.x;
+      const dy = smoothedPoint.y - lastPoint.y;
+      if (dx * dx + dy * dy < MIN_POINT_DISTANCE_SQUARED) {
+        return;
+      }
+
+      smoothedPointRef.current = smoothedPoint;
+      rawPointsRef.current.push(
+        ...interpolateSegmentPoints(lastPoint, smoothedPoint),
+      );
+      redrawFromLatestSnapshot(rawPointsRef.current);
+    },
+    [getCoords, isDrawing, redrawFromLatestSnapshot],
+  );
+
+  const handleEnd = useCallback(() => {
+    if (!isDrawing) return;
+
+    setIsDrawing(false);
+
+    if (rawPointsRef.current.length > 0) {
+      redrawFromLatestSnapshot(rawPointsRef.current);
+      const snapshot = snapshotCanvas();
+      if (snapshot) {
+        undoStackRef.current.push(snapshot);
+        setStrokeCount((previous) => previous + 1);
+      }
+    } else {
+      redrawFromLatestSnapshot();
     }
 
     rawPointsRef.current = [];
-  }, [isDrawing, restoreSnapshot, beautifyAndDraw, saveSnapshot]);
+    smoothedPointRef.current = null;
+  }, [isDrawing, redrawFromLatestSnapshot, snapshotCanvas]);
 
-  // Undo last stroke
   const handleUndo = useCallback(() => {
     if (undoStackRef.current.length <= 1) return;
 
     undoStackRef.current.pop();
     restoreSnapshot(undoStackRef.current[undoStackRef.current.length - 1]);
-    setStrokeCount((prev) => Math.max(0, prev - 1));
+    rawPointsRef.current = [];
+    smoothedPointRef.current = null;
+    setIsDrawing(false);
+    setStrokeCount((previous) => Math.max(0, previous - 1));
   }, [restoreSnapshot]);
 
-  // Clear canvas
   const handleClear = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    resetCanvas(true);
+    setIsDrawing(false);
+  }, [resetCanvas]);
 
-    ctx.clearRect(0, 0, width, height);
-    drawTemplate(ctx);
+  const finishPointerInteraction = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      if (activePointerIdRef.current !== event.pointerId) {
+        return;
+      }
 
-    undoStackRef.current = [ctx.getImageData(0, 0, width, height)];
-    rawPointsRef.current = [];
-    lastCharRef.current = character;
-    setStrokeCount(0);
-  }, [width, height, drawTemplate, character]);
+      activePointerIdRef.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      handleEnd();
+    },
+    [handleEnd],
+  );
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div className="flex flex-col items-center gap-3 transition-all duration-300">
-        <div className="relative inline-block">
-          {showGrid && (
-            <div className="absolute inset-0 pointer-events-none rounded-lg border border-dashed border-white/15 bg-[image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[length:50%_50%]">
-              <div className="absolute inset-0 bg-[image:linear-gradient(135deg,transparent_49%,rgba(255,255,255,0.04)_50%,transparent_51%),linear-gradient(45deg,transparent_49%,rgba(255,255,255,0.04)_50%,transparent_51%)]" />
-            </div>
-          )}
+    <div className="flex w-full flex-col items-center gap-3">
+      <div className="flex w-full max-w-[420px] flex-col items-center gap-2.5 transition-all duration-300 sm:gap-3">
+        <div
+          ref={canvasShellRef}
+          className="flex w-full justify-center"
+        >
+          <div className="app-surface relative inline-block overflow-hidden rounded-[24px] p-2 shadow-[0_20px_50px_rgba(0,0,0,0.45)] sm:p-3">
+            {showGrid && (
+              <div className="pointer-events-none absolute inset-2 rounded-[18px] border border-dashed border-white/15 bg-[image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[length:50%_50%] sm:inset-3">
+                <div className="absolute inset-0 bg-[image:linear-gradient(135deg,transparent_49%,rgba(255,255,255,0.04)_50%,transparent_51%),linear-gradient(45deg,transparent_49%,rgba(255,255,255,0.04)_50%,transparent_51%)]" />
+              </div>
+            )}
 
-          <canvas
-            ref={canvasRef}
-            width={width}
-            height={height}
-            className="rounded-lg cursor-crosshair touch-none bg-[rgba(0,0,0,0.25)] shadow-[inset_0_3px_15px_rgba(0,0,0,0.6)]"
-            onPointerDown={(event) => {
-              activePointerIdRef.current = event.pointerId;
-              event.currentTarget.setPointerCapture(event.pointerId);
-              handleStart(event);
-            }}
-            onPointerMove={(event) => {
-              if (activePointerIdRef.current !== event.pointerId) return;
-              handleMove(event);
-            }}
-            onPointerUp={(event) => {
-              if (activePointerIdRef.current === event.pointerId) {
-                activePointerIdRef.current = null;
-                handleEnd();
-              }
-            }}
-            onPointerCancel={(event) => {
-              if (activePointerIdRef.current === event.pointerId) {
-                activePointerIdRef.current = null;
-                handleEnd();
-              }
-            }}
-          />
+            <canvas
+              ref={canvasRef}
+              className="cursor-crosshair touch-none rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(9,10,12,0.92),rgba(4,5,7,0.96))] shadow-[inset_0_3px_18px_rgba(0,0,0,0.55)]"
+              onPointerDown={(event) => {
+                if (activePointerIdRef.current !== null) return;
+                activePointerIdRef.current = event.pointerId;
+                event.currentTarget.setPointerCapture(event.pointerId);
+                handleStart(event);
+              }}
+              onPointerMove={(event) => {
+                if (activePointerIdRef.current !== event.pointerId) return;
+                handleMove(event);
+              }}
+              onPointerUp={finishPointerInteraction}
+              onPointerCancel={finishPointerInteraction}
+              onLostPointerCapture={(event) => {
+                if (activePointerIdRef.current === event.pointerId) {
+                  activePointerIdRef.current = null;
+                  handleEnd();
+                }
+              }}
+            />
+          </div>
         </div>
 
-        <div className="text-xs text-slate-400">Strokes: {strokeCount}</div>
-
-        <div className="flex gap-2">
+        <div
+          className={`grid w-full gap-2 ${
+            hasExtraControls ? "grid-cols-4" : "mx-auto max-w-[180px] grid-cols-2"
+          }`}
+        >
           <Button
             variant="outline"
             size="sm"
             onClick={handleUndo}
             disabled={strokeCount === 0}
-            className="bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20"
+            className="app-action-neon h-10 px-0"
+            aria-label="Undo"
+            title="Undo"
           >
-            <RotateCcw className="w-4 h-4 mr-1" />
-            Undo
+            <RotateCcw className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={handleClear}
-            className="bg-red-500/10 border-red-500/30 hover:bg-red-500/20"
+            className="app-action-danger h-10 px-0"
+            aria-label="Clear"
+            title="Clear"
           >
-            <Trash2 className="w-4 h-4 mr-1" />
-            Clear
+            <Trash2 className="h-4 w-4" />
           </Button>
+          {extraControls}
         </div>
       </div>
     </div>

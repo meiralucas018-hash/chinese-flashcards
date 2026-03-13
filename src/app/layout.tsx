@@ -32,7 +32,7 @@ const notoSerifSC = Noto_Serif_SC({
 });
 
 export const metadata: Metadata = {
-  title: "中文闪卡 - Chinese Flashcards",
+  title: "NeonLang",
   description:
     "A spaced repetition learning tool for Chinese characters with stroke practice and character breakdown.",
   keywords: [
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     "汉字",
     "拼音",
   ],
-  authors: [{ name: "Chinese Flashcards App" }],
+  authors: [{ name: "NeonLang" }],
   icons: {
     icon: "/logo.svg",
   },
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Chinese Flashcards",
+    title: "NeonLang",
   },
   formatDetection: {
     telephone: false,
@@ -77,7 +77,7 @@ export default function RootLayout({
           name="apple-mobile-web-app-status-bar-style"
           content="black-translucent"
         />
-        <meta name="apple-mobile-web-app-title" content="Chinese Flashcards" />
+        <meta name="apple-mobile-web-app-title" content="NeonLang" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${notoSansSC.variable} ${notoSerifSC.variable} font-chinese-ui antialiased bg-background text-foreground font-sans`}
